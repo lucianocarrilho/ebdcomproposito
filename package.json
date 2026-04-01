@@ -7,7 +7,6 @@
     "build": "npx prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate",
     "deploy": "node deploy.mjs"
   },
   "prisma": {
