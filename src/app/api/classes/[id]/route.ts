@@ -36,11 +36,19 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, description, audience, status } = body;
+    const { name, description, audience, active, status } = body;
+
+    // Use active from frontend or status from body, fallback to current status
+    const updatedStatus = active !== undefined ? active : status;
 
     const updated = await prisma.class.update({
       where: { id },
-      data: { name, description, audience, status },
+      data: { 
+        name, 
+        description, 
+        audience, 
+        status: updatedStatus 
+      },
     });
 
     return NextResponse.json(updated);
@@ -58,11 +66,14 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    // Check students
+    // Soft delete check: only block if there are ACTIVE students? 
+    // For now, let's allow deletion if the user is sure, or at least fix the logic.
+    // If we want to allow deletion even with students, we'd need to handle references.
+    // Let's stick to the current safety but ensure the ID is correct.
     const count = await prisma.student.count({ where: { classId: id } });
     if (count > 0) {
       return NextResponse.json(
-        { error: "Não é possível excluir uma classe com alunos" },
+        { error: `Não é possível excluir uma classe que possui ${count} aluno(s) vinculado(s).` },
         { status: 400 }
       );
     }

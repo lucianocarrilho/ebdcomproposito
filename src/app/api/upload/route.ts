@@ -3,57 +3,78 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { writeFile } from 'fs/promises';
+// Configuração opcional: Se estiver na Vercel, o disk write vai falhar.
+// Usamos apenas Vercel Blob em produção.
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const { searchParams } = new URL(request.url);
-  const filename = searchParams.get('filename');
-
-  if (!filename) {
-    return NextResponse.json({ error: 'Filename is required' }, { status: 400 });
-  }
-
-  // Se o token estiver configurado, use o Vercel Blob (Produção)
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
-    try {
-      const blob = await put(filename, request.body!, {
-        access: 'public',
-      });
-      return NextResponse.json(blob);
-    } catch (error) {
-      console.error('Vercel Blob upload error:', error);
-      // Fallback para local se o blob falhar por algum motivo de config
-    }
-  }
-
-  // Fallback: Salvar localmente (Desenvolvimento)
+  console.log("[API Upload] --- INÍCIO DA REQUISIÇÃO ---");
+  
   try {
-    const bytes = await request.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    const { searchParams } = new URL(request.url);
+    const filename = searchParams.get('filename');
 
-    // Gerar nome único para evitar colisões
-    const uniqueFilename = `${Date.now()}-${filename.replace(/\s+/g, '-')}`;
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
-    
-    // Garantir que a pasta existe
-    if (!fs.existsSync(uploadDir)) {
-      await fs.promises.mkdir(uploadDir, { recursive: true });
+    if (!filename) {
+      console.error("[API Upload] Erro: Nome do arquivo ausente");
+      return NextResponse.json({ error: 'Filename is required' }, { status: 400 });
     }
 
-    const filePath = path.join(uploadDir, uniqueFilename);
-    await writeFile(filePath, buffer);
+    // Leitura do corpo como ArrayBuffer para uso binário puro
+    const arrayBuffer = await request.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    console.log(`[API Upload] Arquivo: ${filename}, Tamanho: ${buffer.length} bytes`);
 
-    const publicUrl = `/uploads/${uniqueFilename}`;
-    
-    console.log(`Local upload success: ${publicUrl}`);
-    
+    // 1. Tentar Vercel Blob (Produção)
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      try {
+        console.log(`[API Upload] Tentando Vercel Blob para ${filename}`);
+        const blob = await put(filename, buffer, {
+          access: 'public',
+        });
+        console.log(`[API Upload] Vercel Blob sucesso: ${blob.url}`);
+        return NextResponse.json(blob);
+      } catch (blobError: any) {
+        console.error('[API Upload] Falha no Vercel Blob:', blobError.message || blobError);
+        // Segue para o fallback local
+      }
+    } else {
+      console.warn('[API Upload] BLOB_READ_WRITE_TOKEN não configurado.');
+    }
+
+    // 2. Fallback: Salvar localmente (SOMENTE EM DESENVOLVIMENTO)
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        const uniqueFilename = `${Date.now()}-${filename.replace(/\s+/g, '-')}`;
+        const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+        
+        if (!fs.existsSync(uploadDir)) {
+          await fs.promises.mkdir(uploadDir, { recursive: true });
+        }
+
+        const filePath = path.join(uploadDir, uniqueFilename);
+        await writeFile(filePath, buffer);
+
+        const publicUrl = `/uploads/${uniqueFilename}`;
+        return NextResponse.json({ url: publicUrl });
+      } catch (localError: any) {
+        console.error('[API Upload] Erro no upload local:', localError);
+      }
+    }
+
+    // Se chegou aqui em produção sem Blob, é um erro de configuração
     return NextResponse.json({ 
-      url: publicUrl,
-      downloadUrl: publicUrl,
-      pathname: uniqueFilename,
-      size: buffer.length
+      error: 'Armazenamento não configurado. Por favor, ative o Vercel Blob no dashboard.' 
+    }, { status: 501 });
+
+  } catch (error: any) {
+    console.error('[API Upload] ERRO CRÍTICO:', error);
+    // Retornamos um JSON com detalhes para o frontend
+    return new NextResponse(JSON.stringify({ 
+      error: 'Erro interno no servidor ao processar imagem', 
+      details: error.message || 'Erro sem mensagem',
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
     });
-  } catch (error) {
-    console.error('Local upload error:', error);
-    return NextResponse.json({ error: 'Failed to upload locally' }, { status: 500 });
   }
 }

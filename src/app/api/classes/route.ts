@@ -34,14 +34,19 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, description, audience } = body;
+    const { name, description, audience, active } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 });
     }
 
     const newClass = await prisma.class.create({
-      data: { name, description, audience },
+      data: { 
+        name, 
+        description, 
+        audience, 
+        status: active !== undefined ? active : true 
+      },
     });
 
     return NextResponse.json(newClass, { status: 201 });

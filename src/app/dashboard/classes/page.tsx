@@ -90,9 +90,13 @@ export default function ClassesPage() {
         await fetchClasses();
         setIsDialogOpen(false);
         setEditingClass(null);
+      } else {
+        const errorData = await res.json();
+        alert(errorData.error || "Erro ao salvar classe");
       }
     } catch (error) {
       console.error("Erro ao salvar classe:", error);
+      alert("Erro de conexão ao salvar classe");
     } finally {
       setSaving(false);
     }
@@ -104,9 +108,15 @@ export default function ClassesPage() {
       if (res.ok) {
         setClasses(classes.filter((c) => c.id !== id));
         setDeleteConfirm(null);
+      } else {
+        const errorData = await res.json();
+        alert(errorData.error || "Erro ao excluir classe");
+        setDeleteConfirm(null);
       }
     } catch (error) {
       console.error("Erro ao deletar classe:", error);
+      alert("Erro de conexão ao excluir classe");
+      setDeleteConfirm(null);
     }
   };
 

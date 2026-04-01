@@ -5,6 +5,7 @@ import { Upload, Loader2, X, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Image from "next/image";
+import { toast } from "sonner";
 
 interface ImageUploadProps {
   onUpload: (url: string) => void;
@@ -20,35 +21,101 @@ export function ImageUpload({ onUpload, defaultImage, label = "Foto" }: ImageUpl
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Local preview
+    const maxSize = 4 * 1024 * 1024; // 4MB
+    if (file.size > maxSize) {
+      alert(`O arquivo é muito grande (${(file.size / 1024 / 1024).toFixed(2)}MB). O limite é 4MB.`);
+      return;
+    }
+
+    setLoading(true);
+    console.log("Iniciando processo de upload para:", file.name, "Tamanho:", file.size);
+
+    // Local preview immediately
     const reader = new FileReader();
     reader.onloadend = () => {
       setPreview(reader.result as string);
     };
     reader.readAsDataURL(file);
 
-    setLoading(true);
-    console.log("Iniciando upload do arquivo:", file.name);
-
     try {
-      const response = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
+      // 1. Tentar obter credenciais do Vercel Blob via API segura
+      let credData;
+      try {
+        const credRes = await fetch('/api/upload-url');
+        if (credRes.ok) {
+          credData = await credRes.json();
+        }
+      } catch (e) {
+        console.warn("Falha ao consultar /api/upload-url:", e);
+      }
+      
+      // Se tivermos credenciais, tentamos o upload direto (Cliente -> Vercel Blob)
+      if (credData?.token && credData?.baseUrl) {
+        console.log("Credenciais do Blob detectadas. Tentando upload direto...");
+        
+        const sanitized = file.name.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-._]/g, '');
+        const uniqueName = `${Date.now()}-${sanitized}`;
+        const uploadUrl = `${credData.baseUrl}/${uniqueName}`;
+
+        const uploadRes = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${credData.token}`,
+            'Content-Type': file.type || 'application/octet-stream',
+          },
+          body: file,
+        });
+
+        if (uploadRes.ok) {
+          const publicUrl = `${credData.baseUrl}/${uniqueName}`;
+          onUpload(publicUrl);
+          console.log('Upload Vercel Blob direto com sucesso:', publicUrl);
+          setLoading(false);
+          return;
+        }
+        console.warn('Upload direto falhou (status ' + uploadRes.status + '), tentando via servidor...');
+      }
+
+      // 2. Fallback: Upload via API Local (/api/upload)
+      // Usamos o corpo binário direto conforme a API espera (request.arrayBuffer())
+      console.log("Iniciando upload via API do servidor (/api/upload)...");
+      const serverUploadRes = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
         method: 'POST',
+        headers: {
+           'Content-Type': file.type || 'application/octet-stream',
+        },
         body: file,
       });
 
-      const data = await response.json();
-      console.log("Resposta do servidor:", data);
-
-      if (data.url) {
-        onUpload(data.url);
-        console.log("Upload concluído com sucesso. URL:", data.url);
-      } else {
-        console.error("Erro no upload: URL não retornada", data);
-        alert("Erro ao processar imagem no servidor.");
+      if (!serverUploadRes.ok) {
+        const errorText = await serverUploadRes.text();
+        let errorMsg = `Erro ${serverUploadRes.status}`;
+        try {
+          const errJson = JSON.parse(errorText);
+          errorMsg = errJson.details || errJson.error || errorMsg;
+        } catch (e) {
+          errorMsg = errorText || errorMsg;
+        }
+        throw new Error(errorMsg);
       }
-    } catch (error) {
-      console.error('Network error during upload:', error);
-      alert("Erro de conexão ao enviar imagem.");
+
+      const serverData = await serverUploadRes.json();
+      if (serverData.url) {
+        onUpload(serverData.url);
+        console.log('Upload via servidor concluído:', serverData.url);
+      } else {
+        throw new Error('Servidor não retornou a URL da imagem.');
+      }
+
+    } catch (error: any) {
+      console.error('--- ERRO FATAL NO UPLOAD ---');
+      console.error('Mensagem:', error.message);
+      console.error('Stack:', error.stack);
+      
+      toast.error(`Falha no upload: ${error.message || 'Erro desconhecido'}`);
+      
+      // Reverter preview se falhou e não tinha imagem antes
+      if (!defaultImage) setPreview(null);
     } finally {
       setLoading(false);
     }
