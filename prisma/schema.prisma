@@ -1,0 +1,257 @@
+// EBD com Propósito - Database Schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  DIRIGENTE
+  VICE_DIRIGENTE
+  PROFESSOR
+  APOIO
+}
+
+enum AttendanceStatus {
+  PRESENTE
+  FALTA
+  FALTA_JUSTIFICADA
+  VISITANTE
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  password      String
+  role          Role      @default(APOIO)
+  image         String?
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  classId       String?
+  class         Class?    @relation("UserClass", fields: [classId], references: [id])
+  justifications AbsenceJustification[]
+  
+  @@map("users")
+}
+
+model Class {
+  id            String    @id @default(cuid())
+  name          String
+  description   String?
+  audience      String?
+  status        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  students      Student[]
+  leaders       Leader[]
+  lessons       Lesson[]
+  attendanceRecords AttendanceRecord[]
+  visitors      Visitor[]
+  quarterHighlights QuarterHighlight[]
+  users         User[]    @relation("UserClass")
+  
+  @@map("classes")
+}
+
+model Student {
+  id            String    @id @default(cuid())
+  name          String
+  gender        String?
+  birthDate     DateTime?
+  phone         String?
+  address       String?
+  guardian       String?
+  classId       String
+  class         Class     @relation(fields: [classId], references: [id])
+  enrollmentDate DateTime @default(now())
+  active        Boolean   @default(true)
+  observations  String?
+  photo         String?
+  baptized      Boolean   @default(false)
+  member        Boolean   @default(false)
+  newConvert    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  attendanceItems    AttendanceItem[]
+  justifications     AbsenceJustification[]
+  visitorsInvited    Visitor[]
+  visitorPoints      StudentVisitorPoint[]
+  quarterHighlights  QuarterHighlight[]
+  rewards            Reward[]
+  
+  @@map("students")
+}
+
+model Leader {
+  id            String    @id @default(cuid())
+  name          String
+  role          String    // Professor, Dirigente, Vice-Dirigente
+  phone         String?
+  email         String?
+  classId       String?
+  class         Class?    @relation(fields: [classId], references: [id])
+  startDate     DateTime  @default(now())
+  observations  String?
+  photo         String?
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@map("leaders")
+}
+
+model Lesson {
+  id            String    @id @default(cuid())
+  number        Int
+  title         String
+  quarter       String
+  category      String    @default("Adultos") // Adultos, Jovens, Adolescentes, Crianças
+  date          DateTime?
+  classId       String?
+  class         Class?    @relation(fields: [classId], references: [id])
+  teacherName   String?
+  summary       String?
+  bibleText     String?
+  image         String?
+  status        String    @default("pendente")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@map("lessons")
+}
+
+model AttendanceRecord {
+  id            String    @id @default(cuid())
+  date          DateTime
+  classId       String
+  class         Class     @relation(fields: [classId], references: [id])
+  observations  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  items         AttendanceItem[]
+  
+  @@unique([date, classId])
+  @@map("attendance_records")
+}
+
+model AttendanceItem {
+  id            String           @id @default(cuid())
+  recordId      String
+  record        AttendanceRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  studentId     String
+  student       Student          @relation(fields: [studentId], references: [id])
+  status        AttendanceStatus
+  observations  String?
+  createdAt     DateTime         @default(now())
+  
+  @@unique([recordId, studentId])
+  @@map("attendance_items")
+}
+
+model AbsenceJustification {
+  id            String    @id @default(cuid())
+  studentId     String
+  student       Student   @relation(fields: [studentId], references: [id])
+  date          DateTime
+  reason        String
+  observations  String?
+  registeredById String?
+  registeredBy  User?     @relation(fields: [registeredById], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@map("absence_justifications")
+}
+
+model Visitor {
+  id            String    @id @default(cuid())
+  name          String
+  date          DateTime
+  classId       String
+  class         Class     @relation(fields: [classId], references: [id])
+  invitedById   String?
+  invitedBy     Student?  @relation(fields: [invitedById], references: [id])
+  observations  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@map("visitors")
+}
+
+model StudentVisitorPoint {
+  id            String    @id @default(cuid())
+  studentId     String
+  student       Student   @relation(fields: [studentId], references: [id])
+  quarter       String
+  points        Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@unique([studentId, quarter])
+  @@map("student_visitor_points")
+}
+
+model QuarterHighlight {
+  id            String    @id @default(cuid())
+  studentId     String
+  student       Student   @relation(fields: [studentId], references: [id])
+  classId       String
+  class         Class     @relation(fields: [classId], references: [id])
+  quarter       String
+  reason        String
+  date          DateTime  @default(now())
+  photo         String?
+  type          String    @default("destaque") // destaque, missionario
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@map("quarter_highlights")
+}
+
+model Reward {
+  id            String    @id @default(cuid())
+  studentId     String
+  student       Student   @relation(fields: [studentId], references: [id])
+  quarter       String
+  description   String
+  delivered     Boolean   @default(false)
+  deliveryDate  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@map("rewards")
+}
+
+model Event {
+  id            String    @id @default(cuid())
+  title         String
+  description   String?
+  date          DateTime
+  endDate       DateTime?
+  type          String    @default("evento") // aula, evento, comemorativo, aniversario
+  allDay        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@map("events")
+}
+
+model Settings {
+  id            String    @id @default(cuid())
+  churchName    String    @default("Igreja")
+  logo          String?
+  currentQuarter String   @default("2026-Q1")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@map("settings")
+}
