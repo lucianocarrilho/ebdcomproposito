@@ -45,6 +45,9 @@ model Class {
   name          String
   description   String?
   audience      String?
+  professor     String?
+  dirigente     String?
+  viceDirigente String?
   status        Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

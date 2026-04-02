@@ -31,8 +31,15 @@ interface ClassItem {
   };
 }
 
+interface Leader {
+  id: string;
+  name: string;
+  role: string;
+}
+
 export default function ClassesPage() {
   const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [leaders, setLeaders] = useState<Leader[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingClass, setEditingClass] = useState<ClassItem | null>(null);
@@ -40,21 +47,74 @@ export default function ClassesPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Estados para os campos controlados (para facilitar o filtro e garantir o reset)
+  const [formName, setFormName] = useState("");
+  const [formDescription, setFormDescription] = useState("");
+  const [formAudience, setFormAudience] = useState("");
+  const [formProfessor, setFormProfessor] = useState("");
+  const [formDirigente, setFormDirigente] = useState("");
+  const [formViceDirigente, setFormViceDirigente] = useState("");
+  const [formActive, setFormActive] = useState(true);
+
   useEffect(() => {
-    fetchClasses();
+    fetchData();
   }, []);
 
-  async function fetchClasses() {
+  async function fetchData(silent = false) {
+    try {
+      if (!silent) setLoading(true);
+      const [resClasses, resLeaders] = await Promise.all([
+        fetch("/api/classes"),
+        fetch(`/api/leaders?t=${Date.now()}`)
+      ]);
+      
+      const dataClasses = await resClasses.json();
+      const dataLeaders = await resLeaders.json();
+      
+      setClasses(Array.isArray(dataClasses) ? dataClasses : []);
+      setLeaders(Array.isArray(dataLeaders) ? dataLeaders : []);
+    } catch (error) {
+      console.error("Erro ao carregar dados:", error);
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }
+
+  const fetchClasses = async () => {
     try {
       const res = await fetch("/api/classes");
       const data = await res.json();
       setClasses(data);
     } catch (error) {
       console.error("Erro ao carregar classes:", error);
-    } finally {
-      setLoading(false);
     }
-  }
+  };
+
+  // Reset form when dialog opens/closes
+  useEffect(() => {
+    if (isDialogOpen) {
+      // Re-fetch data whenever the dialog opens to be sure we have the latest leaders
+      fetchData(true);
+      
+      if (editingClass) {
+        setFormName(editingClass.name || "");
+        setFormDescription(editingClass.description || "");
+        setFormAudience(editingClass.audience || "");
+        setFormProfessor(editingClass.professor || "");
+        setFormDirigente(editingClass.dirigente || "");
+        setFormViceDirigente(editingClass.viceDirigente || "");
+        setFormActive(editingClass.active !== undefined ? editingClass.active : true);
+      } else {
+        setFormName("");
+        setFormDescription("");
+        setFormAudience("");
+        setFormProfessor("");
+        setFormDirigente("");
+        setFormViceDirigente("");
+        setFormActive(true);
+      }
+    }
+  }, [editingClass, isDialogOpen]);
 
   const filteredClasses = classes.filter(
     (c) =>
@@ -65,15 +125,16 @@ export default function ClassesPage() {
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaving(true);
-    const formData = new FormData(e.currentTarget);
+    
+    // O payload deve usar os estados controlados para garantir que salvamos o que está no input
     const payload = {
-      name: formData.get("name"),
-      description: formData.get("description"),
-      audience: formData.get("audience"),
-      professor: formData.get("professor"),
-      dirigente: formData.get("dirigente"),
-      viceDirigente: formData.get("viceDirigente"),
-      active: true,
+      name: formName,
+      description: formDescription,
+      audience: formAudience,
+      professor: formProfessor,
+      dirigente: formDirigente,
+      viceDirigente: formViceDirigente,
+      active: formActive,
     };
 
     try {
@@ -244,7 +305,8 @@ export default function ClassesPage() {
                 id="name"
                 name="name"
                 required
-                defaultValue={editingClass?.name}
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
                 placeholder="Ex: Jovens, Mulheres, Crianças"
               />
             </div>
@@ -253,7 +315,8 @@ export default function ClassesPage() {
               <Textarea
                 id="description"
                 name="description"
-                defaultValue={editingClass?.description}
+                value={formDescription}
+                onChange={(e) => setFormDescription(e.target.value)}
                 placeholder="Breve descrição dos objetivos da classe"
                 className="resize-none"
               />
@@ -263,24 +326,104 @@ export default function ClassesPage() {
               <Input
                 id="audience"
                 name="audience"
-                defaultValue={editingClass?.audience}
+                value={formAudience}
+                onChange={(e) => setFormAudience(e.target.value)}
                 placeholder="Ex: Jovens de 18 a 30 anos"
               />
             </div>
-            <div className="space-y-2">
+
+            {/* Professor(a) Principal */}
+            <div className="space-y-2 relative">
               <Label htmlFor="professor">Professor(a) Principal</Label>
-              <Input id="professor" name="professor" defaultValue={editingClass?.professor} />
+              <Input 
+                id="professor" 
+                name="professor" 
+                value={formProfessor}
+                onChange={(e) => setFormProfessor(e.target.value)}
+                autoComplete="off"
+                placeholder="Busque pelo nome..."
+              />
+              {formProfessor && !leaders.find(l => l.name === formProfessor) && (
+                <div className="absolute z-[100] left-0 right-0 mt-1 max-h-40 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-xl animate-in fade-in zoom-in-95 duration-200">
+                  {leaders
+                    .filter(l => l.name.toLowerCase().includes(formProfessor.toLowerCase()))
+                    .map(l => (
+                      <button
+                        key={l.id}
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-primary/5 hover:text-primary transition-colors border-b border-gray-50 last:border-0"
+                        onClick={() => setFormProfessor(l.name)}
+                      >
+                        <div className="font-medium">{l.name}</div>
+                        <div className="text-[10px] text-gray-400 uppercase">{l.role}</div>
+                      </button>
+                    ))}
+                </div>
+              )}
             </div>
+
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
+              {/* Dirigente */}
+              <div className="space-y-2 relative">
                 <Label htmlFor="dirigente">Dirigente</Label>
-                <Input id="dirigente" name="dirigente" defaultValue={editingClass?.dirigente} />
+                <Input 
+                  id="dirigente" 
+                  name="dirigente" 
+                  value={formDirigente}
+                  onChange={(e) => setFormDirigente(e.target.value)}
+                  autoComplete="off"
+                  placeholder="Busque..."
+                />
+                {formDirigente && !leaders.find(l => l.name === formDirigente) && (
+                  <div className="absolute z-[100] left-0 right-0 mt-1 max-h-40 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-xl">
+                    {leaders
+                      .filter(l => l.name.toLowerCase().includes(formDirigente.toLowerCase()))
+                      .map(l => (
+                        <button
+                          key={l.id}
+                          type="button"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-primary/5 hover:text-primary"
+                          onClick={() => setFormDirigente(l.name)}
+                        >
+                          <div className="font-medium">{l.name}</div>
+                          <div className="text-[10px] text-gray-400 uppercase">{l.role}</div>
+                        </button>
+                      ))}
+                  </div>
+                )}
               </div>
-              <div className="space-y-2">
+              
+              {/* Vice-Dirigente */}
+              <div className="space-y-2 relative">
                 <Label htmlFor="viceDirigente">Vice-Dirigente</Label>
-                <Input id="viceDirigente" name="viceDirigente" defaultValue={editingClass?.viceDirigente} />
+                <Input 
+                  id="viceDirigente" 
+                  name="viceDirigente" 
+                  value={formViceDirigente}
+                  onChange={(e) => setFormViceDirigente(e.target.value)}
+                  autoComplete="off"
+                  placeholder="Busque..."
+                />
+                {formViceDirigente && !leaders.find(l => l.name === formViceDirigente) && (
+                  <div className="absolute z-[100] left-0 right-0 mt-1 max-h-40 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-xl">
+                    {leaders
+                      .filter(l => l.name.toLowerCase().includes(formViceDirigente.toLowerCase()))
+                      .map(l => (
+                        <button
+                          key={l.id}
+                          type="button"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-primary/5 hover:text-primary"
+                          onClick={() => setFormViceDirigente(l.name)}
+                        >
+                          <div className="font-medium">{l.name}</div>
+                          <div className="text-[10px] text-gray-400 uppercase">{l.role}</div>
+                        </button>
+                      ))}
+                  </div>
+                )}
               </div>
             </div>
+
             <DialogFooter className="pt-4">
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={saving}>
                 Cancelar

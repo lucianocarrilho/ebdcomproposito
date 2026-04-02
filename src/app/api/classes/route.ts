@@ -17,10 +17,12 @@ export async function GET() {
 
     const formatted = classes.map((cls) => ({
       ...cls,
+      active: cls.status,
       studentCount: cls._count.students,
-      professor: cls.leaders.find((l) => l.role === "Professor")?.name || "",
-      dirigente: cls.leaders.find((l) => l.role === "Dirigente")?.name || "",
-      viceDirigente: cls.leaders.find((l) => l.role === "Vice-Dirigente")?.name || "",
+      // Usar campos diretos da classe, se existirem, ou o primeiro líder com esse cargo como backup
+      professor: cls.professor || cls.leaders.find((l) => l.role === "Professor")?.name || "",
+      dirigente: cls.dirigente || cls.leaders.find((l) => l.role === "Dirigente")?.name || "",
+      viceDirigente: cls.viceDirigente || cls.leaders.find((l) => l.role === "Vice-Dirigente")?.name || "",
     }));
 
     return NextResponse.json(formatted);
@@ -34,7 +36,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, description, audience, active } = body;
+    const { name, description, audience, active, professor, dirigente, viceDirigente } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 });
@@ -45,6 +47,9 @@ export async function POST(request: NextRequest) {
         name, 
         description, 
         audience, 
+        professor,
+        dirigente,
+        viceDirigente,
         status: active !== undefined ? active : true 
       },
     });

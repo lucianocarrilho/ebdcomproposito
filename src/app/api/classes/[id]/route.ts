@@ -36,8 +36,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, description, audience, active, status } = body;
-
+    const { name, description, audience, active, status, professor, dirigente, viceDirigente } = body;
     // Use active from frontend or status from body, fallback to current status
     const updatedStatus = active !== undefined ? active : status;
 
@@ -47,6 +46,9 @@ export async function PUT(
         name, 
         description, 
         audience, 
+        professor,
+        dirigente,
+        viceDirigente,
         status: updatedStatus 
       },
     });
