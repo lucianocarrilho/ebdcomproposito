@@ -22,6 +22,7 @@ import {
   X,
   ChevronLeft,
   Crown,
+  Fingerprint,
 } from "lucide-react";
 
 const navigation = [
@@ -37,6 +38,7 @@ const navigation = [
   { name: "Relatórios", href: "/dashboard/relatorios", icon: BarChart3 },
   { name: "Calendário", href: "/dashboard/calendario", icon: Calendar },
   { name: "Aniversariantes", href: "/dashboard/aniversariantes", icon: Cake },
+  { name: "Gestão de Acessos", href: "/dashboard/usuarios", icon: Fingerprint },
   { name: "Configurações", href: "/dashboard/configuracoes", icon: Settings },
 ];
 
