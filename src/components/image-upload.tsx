@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Upload, Loader2, X, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,11 @@ interface ImageUploadProps {
 export function ImageUpload({ onUpload, defaultImage, label = "Foto" }: ImageUploadProps) {
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<string | null>(defaultImage || null);
+  
+  // Sincronizar prévia quando a imagem padrão mudar (ex: ao fechar/abrir diálogos)
+  useEffect(() => {
+    setPreview(defaultImage || null);
+  }, [defaultImage]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
