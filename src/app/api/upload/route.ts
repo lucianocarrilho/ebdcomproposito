@@ -30,7 +30,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       console.log(`[API Upload] Tentando Vercel Blob para ${filename}`);
       const blob = await put(filename, buffer, {
         access: 'public',
-        token: blobToken
+        token: blobToken,
+        addRandomSuffix: true
       });
       console.log(`[API Upload] Vercel Blob sucesso: ${blob.url}`);
       return NextResponse.json(blob);
