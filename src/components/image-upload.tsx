@@ -38,47 +38,10 @@ export function ImageUpload({ onUpload, defaultImage, label = "Foto" }: ImageUpl
     reader.readAsDataURL(file);
 
     try {
-      // 1. Tentar obter credenciais do Vercel Blob via API segura
-      let credData;
-      try {
-        const credRes = await fetch('/api/upload-url');
-        if (credRes.ok) {
-          credData = await credRes.json();
-        }
-      } catch (e) {
-        console.warn("Falha ao consultar /api/upload-url:", e);
-      }
-      
-      // Se tivermos credenciais, tentamos o upload direto (Cliente -> Vercel Blob)
-      if (credData?.token && credData?.baseUrl) {
-        console.log("Credenciais do Blob detectadas. Tentando upload direto...");
-        
-        const sanitized = file.name.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-._]/g, '');
-        const uniqueName = `${Date.now()}-${sanitized}`;
-        const uploadUrl = `${credData.baseUrl}/${uniqueName}`;
-
-        const uploadRes = await fetch(uploadUrl, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${credData.token}`,
-            'Content-Type': file.type || 'application/octet-stream',
-          },
-          body: file,
-        });
-
-        if (uploadRes.ok) {
-          const publicUrl = `${credData.baseUrl}/${uniqueName}`;
-          onUpload(publicUrl);
-          console.log('Upload Vercel Blob direto com sucesso:', publicUrl);
-          setLoading(false);
-          return;
-        }
-        console.warn('Upload direto falhou (status ' + uploadRes.status + '), tentando via servidor...');
-      }
-
-      // 2. Fallback: Upload via API Local (/api/upload)
-      // Usamos o corpo binário direto conforme a API espera (request.arrayBuffer())
+      // Usamos apenas a API do servidor (/api/upload) para upload
+      // Isso evita problemas de CORS e permite centralizar o token no backend
       console.log("Iniciando upload via API do servidor (/api/upload)...");
+      
       const serverUploadRes = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
         method: 'POST',
         headers: {
@@ -102,19 +65,21 @@ export function ImageUpload({ onUpload, defaultImage, label = "Foto" }: ImageUpl
       const serverData = await serverUploadRes.json();
       if (serverData.url) {
         onUpload(serverData.url);
-        console.log('Upload via servidor concluído:', serverData.url);
+        console.log('Upload concluído:', serverData.url);
+        toast.success("Foto enviada com sucesso!");
       } else {
         throw new Error('Servidor não retornou a URL da imagem.');
       }
-
     } catch (error: any) {
-      console.error('--- ERRO FATAL NO UPLOAD ---');
+      console.error('--- ERRO NO UPLOAD ---');
       console.error('Mensagem:', error.message);
-      console.error('Stack:', error.stack);
       
-      toast.error(`Falha no upload: ${error.message || 'Erro desconhecido'}`);
+      const finalError = error.message === 'Failed to fetch' 
+        ? "Não foi possível conectar ao servidor de upload. Verifique sua conexão."
+        : error.message;
+
+      toast.error(`Falha no upload: ${finalError}`);
       
-      // Reverter preview se falhou e não tinha imagem antes
       if (!defaultImage) setPreview(null);
     } finally {
       setLoading(false);
