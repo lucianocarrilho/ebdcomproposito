@@ -7,11 +7,21 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const classId = searchParams.get("classId");
     const search = searchParams.get("search");
-    const active = searchParams.get("active");
+    const includeInactive = searchParams.get("includeInactive") === "true";
+    const activeParam = searchParams.get("active");
 
-    const where: Record<string, unknown> = {};
+    const where: Record<string, any> = {};
     if (classId) where.classId = classId;
-    if (active !== null && active !== undefined) where.active = active === "true";
+    
+    // Default to only active students unless explicitly requested
+    if (includeInactive) {
+      // Do nothing, show all
+    } else if (activeParam !== null) {
+      where.active = activeParam === "true";
+    } else {
+      where.active = true;
+    }
+
     if (search) {
       where.name = { contains: search, mode: "insensitive" };
     }
