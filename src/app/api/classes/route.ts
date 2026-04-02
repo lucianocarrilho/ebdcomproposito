@@ -6,7 +6,10 @@ export async function GET() {
   try {
     const classes = await prisma.class.findMany({
       include: {
-        _count: { select: { students: true } },
+        students: {
+          where: { active: true },
+          select: { id: true },
+        },
         leaders: {
           where: { active: true },
           select: { name: true, role: true },
@@ -18,7 +21,7 @@ export async function GET() {
     const formatted = classes.map((cls) => ({
       ...cls,
       active: cls.status,
-      studentCount: cls._count.students,
+      studentCount: cls.students.length,
       // Usar campos diretos da classe, se existirem, ou o primeiro líder com esse cargo como backup
       professor: cls.professor || cls.leaders.find((l) => l.role === "Professor")?.name || "",
       dirigente: cls.dirigente || cls.leaders.find((l) => l.role === "Dirigente")?.name || "",
