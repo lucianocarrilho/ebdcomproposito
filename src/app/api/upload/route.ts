@@ -36,7 +36,13 @@ export async function POST(request: Request): Promise<NextResponse> {
       return NextResponse.json(blob);
     } catch (blobError: any) {
       console.error('[API Upload] Falha no Vercel Blob:', blobError.message || blobError);
-      // Segue para o fallback local apenas se em desenvolvimento
+      // Se falhou o blob em produção, vamos retornar o erro real para depuração
+      if (process.env.NODE_ENV !== 'development') {
+        return NextResponse.json({ 
+          error: 'Falha ao gravar no Vercel Blob', 
+          details: blobError.message || 'Erro desconhecido no SDK'
+        }, { status: 500 });
+      }
     }
 
     // 2. Fallback: Salvar localmente (SOMENTE EM DESENVOLVIMENTO)
