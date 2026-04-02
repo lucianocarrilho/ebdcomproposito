@@ -24,20 +24,19 @@ export async function POST(request: Request): Promise<NextResponse> {
     console.log(`[API Upload] Arquivo: ${filename}, Tamanho: ${buffer.length} bytes`);
 
     // 1. Tentar Vercel Blob (Produção)
-    if (process.env.BLOB_READ_WRITE_TOKEN) {
-      try {
-        console.log(`[API Upload] Tentando Vercel Blob para ${filename}`);
-        const blob = await put(filename, buffer, {
-          access: 'public',
-        });
-        console.log(`[API Upload] Vercel Blob sucesso: ${blob.url}`);
-        return NextResponse.json(blob);
-      } catch (blobError: any) {
-        console.error('[API Upload] Falha no Vercel Blob:', blobError.message || blobError);
-        // Segue para o fallback local
-      }
-    } else {
-      console.warn('[API Upload] BLOB_READ_WRITE_TOKEN não configurado.');
+    const blobToken = "vercel_blob_rw_12Z3rqWooPyc8G9Q_QvILDyvVrVA0gqpZJAmg0V6eR2qg8A";
+    
+    try {
+      console.log(`[API Upload] Tentando Vercel Blob para ${filename}`);
+      const blob = await put(filename, buffer, {
+        access: 'public',
+        token: blobToken
+      });
+      console.log(`[API Upload] Vercel Blob sucesso: ${blob.url}`);
+      return NextResponse.json(blob);
+    } catch (blobError: any) {
+      console.error('[API Upload] Falha no Vercel Blob:', blobError.message || blobError);
+      // Segue para o fallback local apenas se em desenvolvimento
     }
 
     // 2. Fallback: Salvar localmente (SOMENTE EM DESENVOLVIMENTO)
