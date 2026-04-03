@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 
 // GET - Listar alunos
 export async function GET(request: NextRequest) {
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest) {
     const activeParam = searchParams.get("active");
 
     // Initialize where object with explicit types for Prisma
-    let where: any = {};
+    const where: Prisma.StudentWhereInput = {};
     if (classId) where.classId = classId;
     
     // Default filter for only active students
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      where.name = { contains: search, mode: "insensitive" };
+      where.name = { contains: search };
     }
 
     const students = await prisma.student.findMany({

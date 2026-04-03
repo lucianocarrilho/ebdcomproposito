@@ -326,7 +326,7 @@ export default function PresencaPage() {
       {total > 0 && !students.some(s => s.status) && (
         <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-100 rounded-xl text-blue-700 text-xs">
           <AlertTriangle className="h-4 w-4" />
-          Lembre-se de clicar em "Salvar Chamada" após preencher as presenças.
+          Lembre-se de clicar em &quot;Salvar Chamada&quot; após preencher as presenças.
         </div>
       )}
     </div>
