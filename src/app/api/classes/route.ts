@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
 // GET - Listar classes
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const classes = await prisma.class.findMany({
       include: {

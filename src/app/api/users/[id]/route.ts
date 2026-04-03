@@ -12,13 +12,18 @@ export async function PUT(
     const body = await request.json();
     const { name, email, role, password } = body;
 
-    const data: any = { name, email, role };
-    if (password && password.trim() !== "") {
+    const data: any = { 
+      name: name as string, 
+      email: email as string, 
+      role: role as any,
+    };
+    
+    if (password && (password as string).trim() !== "") {
       data.password = await bcrypt.hash(password, 10);
     }
 
     const updated = await prisma.user.update({
-      where: { id },
+      where: { id: id as string },
       data,
       select: {
         id: true,
@@ -44,7 +49,7 @@ export async function DELETE(
     const { id } = await params;
     
     await prisma.user.update({
-      where: { id },
+      where: { id: id as string },
       data: { active: false },
     });
 

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 
 // GET - Listar usuários
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const users = await prisma.user.findMany({
       where: { active: true },

@@ -10,16 +10,17 @@ export async function GET(request: NextRequest) {
     const includeInactive = searchParams.get("includeInactive") === "true";
     const activeParam = searchParams.get("active");
 
-    const where: Record<string, any> = {};
+    // Initialize where object with explicit types for Prisma
+    let where: any = {};
     if (classId) where.classId = classId;
     
-    // Default to only active students unless explicitly requested
-    if (includeInactive) {
-      // Do nothing, show all
-    } else if (activeParam !== null) {
-      where.active = activeParam === "true";
-    } else {
-      where.active = true;
+    // Default filter for only active students
+    if (!includeInactive) {
+      if (activeParam !== null) {
+        where.active = activeParam === "true";
+      } else {
+        where.active = true;
+      }
     }
 
     if (search) {
