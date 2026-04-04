@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
 
     const userRole = (session.user as any).role;
     const userClassId = (session.user as any).classId;
+    const userName = session.user?.name || "";
 
     const { searchParams } = new URL(request.url);
     const queryClassId = searchParams.get("classId");
@@ -23,9 +24,19 @@ export async function GET(request: NextRequest) {
     // Initialize where object with explicit types for Prisma
     const where: Prisma.StudentWhereInput = {};
     
-    // Enforcement: Professors only see their own class
-    if (userRole === "PROFESSOR" && userClassId) {
-      where.classId = userClassId;
+    // Enforcement: Professors only see their own class(es)
+    if (userRole === "PROFESSOR") {
+      const teacherClasses = await prisma.class.findMany({
+        where: {
+          OR: [
+            { id: userClassId || undefined },
+            { professor: { contains: userName } }
+          ]
+        },
+        select: { id: true }
+      });
+      const classIds = teacherClasses.map(c => c.id);
+      where.classId = { in: classIds };
     } else if (queryClassId) {
       where.classId = queryClassId;
     }

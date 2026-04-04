@@ -12,10 +12,14 @@ export async function GET(request: NextRequest) {
 
     const role = (session.user as any).role;
     const classId = (session.user as any).classId;
+    const userName = session.user?.name || "";
 
     const where: any = {};
-    if (role === "PROFESSOR" && classId) {
-      where.id = classId;
+    if (role === "PROFESSOR") {
+      where.OR = [
+        { id: classId || undefined },
+        { professor: { contains: userName } }
+      ];
     }
 
     const classes = await prisma.class.findMany({
