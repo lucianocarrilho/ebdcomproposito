@@ -1,3 +1,4 @@
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -6,12 +7,48 @@ export const dynamic = "force-dynamic";
 // GET - Listar lições
 export async function GET(request: NextRequest) {
   try {
+    const session = await auth();
+    if (!session) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+
+    const userRole = (session.user as any).role;
+    const userClassId = (session.user as any).classId;
+    const userName = session.user?.name || "";
+
     const { searchParams } = new URL(request.url);
     const quarter = searchParams.get("quarter") || "2026-Q2";
     const category = searchParams.get("category");
 
     const where: Record<string, unknown> = { quarter };
-    if (category) where.category = category;
+
+    // Enforcement: Professors only see lessons for categories they teach
+    if (userRole === "PROFESSOR") {
+      const teacherClasses = await prisma.class.findMany({
+        where: {
+          OR: [
+            { id: userClassId || undefined },
+            { professor: { contains: userName } }
+          ]
+        },
+        select: { name: true }
+      });
+      
+      const allowedCategories = ["Adultos", "Jovens", "Adolescentes", "Crianças"].filter(cat => 
+        teacherClasses.some(cls => cls.name.toLowerCase().includes(cat.toLowerCase().substring(0, 5)))
+      );
+
+      if (category) {
+        if (!allowedCategories.includes(category)) {
+          return NextResponse.json([]); // Return empty if category not allowed
+        }
+        where.category = category;
+      } else {
+        where.category = { in: allowedCategories };
+      }
+    } else if (category) {
+      where.category = category;
+    }
 
     const lessons = await prisma.lesson.findMany({
       where,

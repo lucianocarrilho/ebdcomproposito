@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ImageUpload } from "@/components/image-upload";
 import { toast } from "sonner";
+import { useSession } from "next-auth/react";
 
 // Categorias de revistas da EBD
 const CATEGORIES = [
@@ -111,9 +112,11 @@ interface Lesson {
 }
 
 export default function LicoesPage() {
+  const { data: session } = useSession();
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [userClasses, setUserClasses] = useState<any[]>([]);
   
   // Filtros
   const [selectedQuarter, setSelectedQuarter] = useState(getCurrentQuarter());
@@ -130,6 +133,33 @@ export default function LicoesPage() {
   const [lessonToDelete, setLessonToDelete] = useState<string | null>(null);
 
   const quarters = getQuarters();
+
+  // Fetch classes to determine allowed categories
+  useEffect(() => {
+    const fetchUserClasses = async () => {
+      try {
+        const res = await fetch("/api/classes");
+        if (res.ok) {
+          const data = await res.json();
+          setUserClasses(data);
+          
+          // Se for professor, mudar a categoria inicial para a primeira disponível
+          const role = (session?.user as any)?.role;
+          if (role === "PROFESSOR") {
+            const allowed = CATEGORIES.filter(cat => 
+              data.some((cls: any) => cls.name.toLowerCase().includes(cat.id.toLowerCase().substring(0, 5)))
+            );
+            if (allowed.length > 0 && !allowed.find(a => a.id === selectedCategory)) {
+              setSelectedCategory(allowed[0].id);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao buscar classes do usuário:", err);
+      }
+    };
+    if (session) fetchUserClasses();
+  }, [session, selectedCategory]);
 
   const fetchLessons = useCallback(async () => {
     setLoading(true);
@@ -261,6 +291,16 @@ export default function LicoesPage() {
 
   const currentQuarterLabel = quarters.find(q => q.value === selectedQuarter)?.label || selectedQuarter;
 
+  const filteredCategories = CATEGORIES.filter(cat => {
+    const role = (session?.user as any)?.role;
+    if (role === "ADMIN") return true;
+    
+    // Para professores, mostramos apenas categorias que batem com o nome das classes deles
+    return userClasses.some((cls: any) => 
+      cls.name.toLowerCase().includes(cat.id.toLowerCase().substring(0, 5))
+    );
+  });
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -296,7 +336,7 @@ export default function LicoesPage() {
 
       {/* Abas de Categoria (Revista) */}
       <div className="flex gap-2 overflow-x-auto pb-1">
-        {CATEGORIES.map(cat => (
+        {filteredCategories.map(cat => (
           <button
             key={cat.id}
             onClick={() => setSelectedCategory(cat.id)}
@@ -490,14 +530,16 @@ export default function LicoesPage() {
             
             <div className="space-y-2">
               <Label className="text-xs font-bold text-gray-500 uppercase">Status</Label>
-              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                <SelectTrigger className="bg-white rounded-xl"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pendente">📋 Pendente</SelectItem>
-                  <SelectItem value="em andamento">⏳ Em Andamento</SelectItem>
-                  <SelectItem value="concluída">✅ Concluída</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="space-y-2">
+                <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                  <SelectTrigger className="bg-white rounded-xl"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pendente">📋 Pendente</SelectItem>
+                    <SelectItem value="em andamento">⏳ Em Andamento</SelectItem>
+                    <SelectItem value="concluída">✅ Concluída</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             
             <div className="space-y-2">
