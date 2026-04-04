@@ -1,10 +1,40 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { AttendanceStatus } from "@prisma/client";
+import { auth } from "@/lib/auth";
+
+export const dynamic = "force-dynamic";
 
 // GET - Dashboard statistics
 export async function GET() {
   try {
+    const session = await auth();
+    if (!session) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+
+    const userRole = (session.user as any).role;
+    const userClassId = (session.user as any).classId;
+    const userName = session.user?.name || "";
+
+    // Determine allowed classes for filtering
+    let allowedClassIds: string[] | null = null;
+    if (userRole === "PROFESSOR") {
+      const teacherClasses = await prisma.class.findMany({
+        where: {
+          OR: [
+            { id: userClassId || undefined },
+            { professor: { contains: userName } }
+          ]
+        },
+        select: { id: true }
+      });
+      allowedClassIds = teacherClasses.map(c => c.id);
+    }
+
+    const studentWhere = allowedClassIds ? { classId: { in: allowedClassIds } } : {};
+    const classWhere = allowedClassIds ? { id: { in: allowedClassIds }, status: true } : { status: true };
+
     // Totals
     const [
       totalStudents,
@@ -12,10 +42,12 @@ export async function GET() {
       totalClasses,
       totalLeaders,
     ] = await Promise.all([
-      prisma.student.count(),
-      prisma.student.count({ where: { active: true } }),
-      prisma.class.count({ where: { status: true } }),
-      prisma.leader.count({ where: { active: true } }),
+      prisma.student.count({ where: studentWhere }),
+      prisma.student.count({ where: { ...studentWhere, active: true } }),
+      prisma.class.count({ where: classWhere }),
+      userRole === "ADMIN" 
+        ? prisma.leader.count({ where: { active: true } }) 
+        : Promise.resolve(0), // Leaders usually only visible to Admin
     ]);
 
     // Last Sunday attendance
@@ -24,12 +56,17 @@ export async function GET() {
     lastSunday.setDate(today.getDate() - today.getDay());
     lastSunday.setHours(0, 0, 0, 0);
 
+    const attendanceWhere: any = {
+      record: { date: { gte: lastSunday } },
+    };
+    if (allowedClassIds) {
+      attendanceWhere.record.classId = { in: allowedClassIds };
+    }
+
     const lastAttendance = await prisma.attendanceItem.groupBy({
       by: ["status"],
       _count: { id: true },
-      where: {
-        record: { date: { gte: lastSunday } },
-      },
+      where: attendanceWhere,
     });
 
     const getStatusCount = (status: AttendanceStatus) => 
@@ -43,6 +80,7 @@ export async function GET() {
     const currentMonth = today.getMonth() + 1;
     const aniversariantes = await prisma.student.findMany({
       where: {
+        ...studentWhere,
         active: true,
         birthDate: { not: null },
       },
@@ -57,12 +95,12 @@ export async function GET() {
 
     const aniversariantesDoMes = aniversariantes.filter((a) => {
       if (!a.birthDate) return false;
-      return a.birthDate.getMonth() + 1 === currentMonth;
+      return a.birthDate.getUTCMonth() + 1 === currentMonth;
     });
 
     // Attendance by class
     const classes = await prisma.class.findMany({
-      where: { status: true },
+      where: classWhere,
       select: { id: true, name: true },
     });
 
@@ -97,12 +135,17 @@ export async function GET() {
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 7);
 
+      const wkWhere: any = {
+        record: { date: { gte: weekStart, lt: weekEnd } },
+      };
+      if (allowedClassIds) {
+        wkWhere.record.classId = { in: allowedClassIds };
+      }
+
       const items = await prisma.attendanceItem.groupBy({
         by: ["status"],
         _count: { id: true },
-        where: {
-          record: { date: { gte: weekStart, lt: weekEnd } },
-        },
+        where: wkWhere,
       });
 
       const getWkStatusCount = (status: AttendanceStatus) => 
@@ -115,13 +158,18 @@ export async function GET() {
       });
     }
 
-    // Top students by frequency
+    // Settings
     const settings = await prisma.settings.findFirst();
     const quarter = settings?.currentQuarter || "2026-Q1";
 
     // Highlights
+    const highlightWhere: any = { quarter };
+    if (allowedClassIds) {
+      highlightWhere.classId = { in: allowedClassIds };
+    }
+
     const highlights = await prisma.quarterHighlight.findMany({
-      where: { quarter },
+      where: highlightWhere,
       include: {
         student: { select: { name: true, photo: true } },
         class: { select: { name: true } },
@@ -138,7 +186,7 @@ export async function GET() {
         totalStudents,
         activeStudents,
         totalClasses,
-        totalLeaders,
+        totalLeaders: userRole === "ADMIN" ? totalLeaders : 0,
         presentes,
         faltas,
         justificadas,
