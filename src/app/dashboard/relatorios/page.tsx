@@ -14,6 +14,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import { toast } from "sonner";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const reportTypes = [
   { id: "aluno", label: "Por Aluno", icon: Users, description: "Frequência individual de cada aluno" },
@@ -74,6 +76,89 @@ export default function RelatoriosPage() {
 
     fetchReport();
   }, [dateFrom, dateTo, selectedClass, selectedReport]);
+
+  const handleExportPDF = () => {
+    if (!data) {
+      toast.error("Aguarde o carregamento dos dados");
+      return;
+    }
+
+    try {
+      const doc = new jsPDF();
+      const reportTitle = reportTypes.find(r => r.id === selectedReport)?.label || "Relatório EBD";
+      
+      // Cabeçalho Premium
+      doc.setFillColor(30, 58, 95); // Cor escura Navy
+      doc.rect(0, 0, 210, 40, 'F');
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(22);
+      doc.text("EBD com Propósito", 15, 20);
+      
+      doc.setFontSize(12);
+      doc.text(reportTitle, 15, 30);
+      doc.text(`Período: ${new Date(dateFrom).toLocaleDateString()} a ${new Date(dateTo).toLocaleDateString()}`, 15, 36);
+      
+      doc.setTextColor(40, 40, 40);
+
+      // Lógica por tipo de relatório
+      if (selectedReport === "classe" && data.classData) {
+        autoTable(doc, {
+          startY: 50,
+          head: [['Classe', 'Alunos', 'Presenças', 'Frequência %']],
+          body: data.classData.map((c: any) => [
+            c.classe,
+            c.matriculados,
+            c.presencas || (c.matriculados - c.faltas), // Ajuste baseado no que temos
+            `${c.mediaFreq}%`
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [30, 58, 95] }
+        });
+      } else if (selectedReport === "aluno" && data.students) {
+        autoTable(doc, {
+          startY: 50,
+          head: [['Aluno', 'Classe', 'Presenças', 'Faltas', 'Freq %']],
+          body: data.students.map((s: any) => [
+            s.name,
+            s.classe,
+            s.presencas,
+            s.faltas,
+            `${s.freq}%`
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [30, 58, 95] }
+        });
+      } else if (selectedReport === "aniversariantes" && data.aniversariantes) {
+        autoTable(doc, {
+          startY: 50,
+          head: [['Aniversariante', 'Data', 'Classe']],
+          body: data.aniversariantes.map((a: any) => [
+            a.name,
+            new Date(a.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' }),
+            a.classe
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [30, 58, 95] }
+        });
+      }
+
+      // Rodapé
+      const pageCount = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(10);
+        doc.setTextColor(150);
+        doc.text(`Gerado em: ${new Date().toLocaleString()} - Página ${i} de ${pageCount}`, 15, 285);
+      }
+
+      doc.save(`relatorio-ebd-${selectedReport}-${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success("PDF gerado com sucesso!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao gerar PDF");
+    }
+  };
 
   const renderReportContent = () => {
     if (loading) {
@@ -323,8 +408,13 @@ export default function RelatoriosPage() {
               </Select>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="h-10">
-                <Download className="h-4 w-4 mr-2" /> PDF
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-10 hover:bg-primary/5 hover:text-primary transition-all"
+                onClick={handleExportPDF}
+              >
+                <FileText className="h-4 w-4 mr-2" /> PDF
               </Button>
               <Button variant="outline" size="sm" className="h-10">
                 <Download className="h-4 w-4 mr-2" /> Excel
