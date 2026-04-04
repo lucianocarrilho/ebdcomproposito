@@ -77,7 +77,7 @@ export default function RelatoriosPage() {
     fetchReport();
   }, [dateFrom, dateTo, selectedClass, selectedReport]);
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (!data) {
       toast.error("Aguarde o carregamento dos dados");
       return;
@@ -87,21 +87,65 @@ export default function RelatoriosPage() {
       const doc = new jsPDF();
       const reportTitle = reportTypes.find(r => r.id === selectedReport)?.label || "Relatório EBD";
       
-      // Cabeçalho Premium
-      doc.setFillColor(30, 58, 95); // Cor escura Navy
-      doc.rect(0, 0, 210, 40, 'F');
+      const pageWidth = doc.internal.pageSize.getWidth();
       
-      doc.setTextColor(255, 255, 255);
+      // Função para carregar imagem como Base64
+      const getBase64Image = (url: string): Promise<string> => {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = 'Anonymous';
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/png'));
+          };
+          img.onerror = reject;
+          img.src = url;
+        });
+      };
+
+      try {
+        // Carregar logos
+        const logoEbd = await getBase64Image('/logo_ebd.png');
+        const logoIeadpe = await getBase64Image('/logo_ieadpe.png');
+
+        // Logo EBD (Esquerda)
+        doc.addImage(logoEbd, 'PNG', 15, 10, 25, 18);
+        
+        // Logo IEADPE (Direita)
+        doc.addImage(logoIeadpe, 'PNG', pageWidth - 40, 10, 25, 23);
+      } catch (err) {
+        console.warn("Logos não carregadas, continuando sem elas.");
+      }
+
+      // Cabeçalho Centralizado
       doc.setFontSize(22);
-      doc.text("EBD com Propósito", 15, 20);
+      doc.setTextColor(30, 58, 95);
+      doc.setFont("helvetica", "bold");
+      const titleText = "EBD com Propósito";
+      const titleWidth = doc.getTextWidth(titleText);
+      doc.text(titleText, (pageWidth - titleWidth) / 2, 22);
       
       doc.setFontSize(12);
-      doc.text(reportTitle, 15, 30);
-      doc.text(`Período: ${new Date(dateFrom).toLocaleDateString()} a ${new Date(dateTo).toLocaleDateString()}`, 15, 36);
+      doc.setTextColor(100);
+      doc.setFont("helvetica", "normal");
       
-      doc.setTextColor(40, 40, 40);
+      const typeText = reportTitle;
+      const typeWidth = doc.getTextWidth(typeText);
+      doc.text(typeText, (pageWidth - typeWidth) / 2, 30);
+      
+      const periodText = `Período: ${new Date(dateFrom).toLocaleDateString()} a ${new Date(dateTo).toLocaleDateString()}`;
+      const periodWidth = doc.getTextWidth(periodText);
+      doc.text(periodText, (pageWidth - periodWidth) / 2, 36);
 
-      // Lógica por tipo de relatório
+      // Linha Divisora
+      doc.setDrawColor(230, 230, 230);
+      doc.line(15, 42, pageWidth - 15, 42);
+
+      // Lógica por tipo de relatório (Tabelas)
       if (selectedReport === "classe" && data.classData) {
         autoTable(doc, {
           startY: 50,
@@ -109,11 +153,12 @@ export default function RelatoriosPage() {
           body: data.classData.map((c: any) => [
             c.classe,
             c.matriculados,
-            c.presencas || (c.matriculados - c.faltas), // Ajuste baseado no que temos
+            c.presencas || (c.matriculados - c.faltas),
             `${c.mediaFreq}%`
           ]),
           theme: 'striped',
-          headStyles: { fillColor: [30, 58, 95] }
+          headStyles: { fillColor: [30, 58, 95] },
+          styles: { fontSize: 9 }
         });
       } else if (selectedReport === "aluno" && data.students) {
         autoTable(doc, {
@@ -127,7 +172,8 @@ export default function RelatoriosPage() {
             `${s.freq}%`
           ]),
           theme: 'striped',
-          headStyles: { fillColor: [30, 58, 95] }
+          headStyles: { fillColor: [30, 58, 95] },
+          styles: { fontSize: 9 }
         });
       } else if (selectedReport === "aniversariantes" && data.aniversariantes) {
         autoTable(doc, {
@@ -139,17 +185,19 @@ export default function RelatoriosPage() {
             a.classe
           ]),
           theme: 'striped',
-          headStyles: { fillColor: [30, 58, 95] }
+          headStyles: { fillColor: [30, 58, 95] },
+          styles: { fontSize: 9 }
         });
       }
 
       // Rodapé
       const pageCount = (doc as any).internal.getNumberOfPages();
+      doc.setFontSize(8);
+      doc.setTextColor(170);
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
-        doc.setFontSize(10);
-        doc.setTextColor(150);
-        doc.text(`Gerado em: ${new Date().toLocaleString()} - Página ${i} de ${pageCount}`, 15, 285);
+        doc.text(`Gerado em: ${new Date().toLocaleString()} - Sistema EBD com Propósito`, 15, 287);
+        doc.text(`Página ${i} de ${pageCount}`, pageWidth - 30, 287);
       }
 
       doc.save(`relatorio-ebd-${selectedReport}-${new Date().toISOString().split('T')[0]}.pdf`);
