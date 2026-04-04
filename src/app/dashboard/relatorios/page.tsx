@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect } from "react";
 import { BarChart3, Download, FileText, Users, GraduationCap, UserPlus, Cake, Award, Filter, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
