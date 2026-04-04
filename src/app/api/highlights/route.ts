@@ -1,59 +1,55 @@
-import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
-// GET - Listar destaques
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const quarter = searchParams.get("quarter");
-
-    const where: Record<string, unknown> = {};
-    if (quarter) where.quarter = quarter;
-
     const highlights = await prisma.quarterHighlight.findMany({
-      where,
       include: {
-        student: { select: { name: true } },
-        class: { select: { name: true } },
+        student: {
+          select: {
+            name: true,
+            photo: true,
+            class: {
+              select: { name: true }
+            }
+          }
+        },
+        class: {
+          select: { name: true }
+        }
       },
       orderBy: { date: "desc" },
     });
 
     return NextResponse.json(highlights);
   } catch (error) {
-    console.error("Erro ao buscar destaques:", error);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    console.error("Error fetching highlights:", error);
+    return NextResponse.json({ error: "Erro ao carregar destaques" }, { status: 500 });
   }
 }
 
-// POST - Criar destaque
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { studentId, classId, quarter, reason, type, photo } = body;
-
-    if (!studentId || !classId || !reason) {
-      return NextResponse.json({ error: "Dados incompletos" }, { status: 400 });
-    }
+    const { studentId, classId, quarter, reason, type } = body;
 
     const highlight = await prisma.quarterHighlight.create({
       data: {
         studentId,
         classId,
-        quarter: quarter || "2026-Q1",
+        quarter,
         reason,
-        type: type || "destaque",
-        photo,
+        type,
+        date: new Date(),
       },
       include: {
-        student: { select: { name: true } },
-        class: { select: { name: true } },
-      },
+        student: { select: { name: true } }
+      }
     });
 
-    return NextResponse.json(highlight, { status: 201 });
+    return NextResponse.json(highlight);
   } catch (error) {
-    console.error("Erro ao criar destaque:", error);
-    return NextResponse.json({ error: "Erro ao criar" }, { status: 500 });
+    console.error("Error creating highlight:", error);
+    return NextResponse.json({ error: "Erro ao registrar destaque" }, { status: 500 });
   }
 }

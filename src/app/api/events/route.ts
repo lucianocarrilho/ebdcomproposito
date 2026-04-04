@@ -1,58 +1,88 @@
-import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
-// GET - Listar eventos
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const month = searchParams.get("month");
+    const month = searchParams.get("month"); // 0-11
     const year = searchParams.get("year");
 
-    const where: Record<string, unknown> = {};
-    if (month && year) {
-      const m = parseInt(month);
-      const y = parseInt(year);
-      const start = new Date(y, m, 1);
-      const end = new Date(y, m + 1, 0, 23, 59, 59);
-      where.date = { gte: start, lte: end };
+    if (!month || !year) {
+      return NextResponse.json({ error: "Mês e ano são obrigatórios" }, { status: 400 });
     }
 
-    const events = await prisma.event.findMany({
-      where,
-      orderBy: { date: "asc" },
+    const m = parseInt(month);
+    const y = parseInt(year);
+
+    // Fetch manual events
+    const startOfMonth = new Date(Date.UTC(y, m, 1));
+    const endOfMonth = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59));
+
+    const manualEvents = await prisma.event.findMany({
+      where: {
+        date: {
+          gte: startOfMonth,
+          lte: endOfMonth,
+        },
+      },
     });
 
-    return NextResponse.json(events);
+    // Fetch student birthdays for this month
+    const students = await prisma.student.findMany({
+      where: {
+        active: true,
+        birthDate: { not: null },
+      },
+      select: {
+        name: true,
+        birthDate: true,
+      },
+    });
+
+    const birthdayEvents = students
+      .filter((s) => s.birthDate && s.birthDate.getUTCMonth() === m)
+      .map((s) => ({
+        id: `bday-${s.name}-${s.birthDate?.toISOString()}`,
+        title: `Niver: ${s.name.split(" ")[0]}`,
+        date: new Date(Date.UTC(y, m, s.birthDate!.getUTCDate())),
+        type: "aniversario",
+      }));
+
+    // Combine and format
+    const allEvents = [
+      ...manualEvents.map((e) => ({
+        id: e.id,
+        title: e.title,
+        date: e.date,
+        type: e.type,
+      })),
+      ...birthdayEvents,
+    ];
+
+    return NextResponse.json(allEvents);
   } catch (error) {
-    console.error("Erro ao buscar eventos:", error);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    console.error("Error fetching events:", error);
+    return NextResponse.json({ error: "Erro ao carregar calendário" }, { status: 500 });
   }
 }
 
-// POST - Criar evento
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { title, description, date, endDate, type, allDay } = body;
-
-    if (!title || !date) {
-      return NextResponse.json({ error: "Título e data são obrigatórios" }, { status: 400 });
-    }
+    const { title, date, type, description } = body;
 
     const event = await prisma.event.create({
       data: {
         title,
-        description,
         date: new Date(date),
-        endDate: endDate ? new Date(endDate) : null,
-        type: type || "evento",
-        allDay: allDay ?? true,
+        type,
+        description,
       },
     });
 
-    return NextResponse.json(event, { status: 201 });
+    return NextResponse.json(event);
   } catch (error) {
-    console.error("Erro ao criar evento:", error);
-    return NextResponse.json({ error: "Erro ao criar" }, { status: 500 });
+    console.error("Error creating event:", error);
+    return NextResponse.json({ error: "Erro ao registrar evento" }, { status: 500 });
   }
 }
