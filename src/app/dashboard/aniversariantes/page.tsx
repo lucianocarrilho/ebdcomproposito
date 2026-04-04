@@ -1,56 +1,88 @@
 "use client";
 
-import React, { useState } from "react";
-import { Cake, Calendar, GraduationCap, Gift } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { Cake, Calendar, GraduationCap, Gift, Loader2, Search } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { useSession } from "next-auth/react";
 
-const aniversariantes = [
-  { nome: "Ana Maria Silva", nascimento: "02/04", classe: "Mulheres", idade: 31 },
-  { nome: "Carlos Eduardo", nascimento: "05/04", classe: "Homens", idade: 45 },
-  { nome: "Isabela Martins", nascimento: "08/04", classe: "Crianças", idade: 11 },
-  { nome: "Pedro Costa", nascimento: "12/04", classe: "Adolescentes", idade: 14 },
-  { nome: "Juliana Santos", nascimento: "15/04", classe: "Jovens", idade: 24 },
-  { nome: "Lucas Ferreira", nascimento: "18/04", classe: "Jovens", idade: 22 },
-  { nome: "Roberto Almeida", nascimento: "20/04", classe: "Homens", idade: 38 },
-  { nome: "Raquel Oliveira", nascimento: "25/04", classe: "Mulheres", idade: 29 },
-  { nome: "Gabriel Santos", nascimento: "28/04", classe: "Crianças", idade: 9 },
-  { nome: "Fernanda Lima", nascimento: "30/04", classe: "Jovens", idade: 20 },
-];
-
-const hoje = new Date();
-const diaHoje = 30;
-const semanaFim = diaHoje + 7;
+interface Aniversariante {
+  id: string;
+  nome: string;
+  nascimento: string;
+  classe: string;
+  idade: number;
+  photo?: string;
+  dia: number;
+}
 
 export default function AniversariantesPage() {
+  const { data: session } = useSession();
+  const [birthdays, setBirthdays] = useState<Aniversariante[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filterClass, setFilterClass] = useState("Todas");
   const [filterPeriod, setFilterPeriod] = useState("mes");
+  const [availableClasses, setAvailableClasses] = useState<any[]>([]);
 
-  const filtered = aniversariantes.filter(a => {
+  const fetchBirthdays = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/students/birthdays", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setBirthdays(data);
+      }
+    } catch (error) {
+      console.error("Erro ao buscar aniversariantes:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchClasses = useCallback(async () => {
+    try {
+      const res = await fetch("/api/classes");
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableClasses(data);
+      }
+    } catch (error) {
+      console.error("Erro ao buscar classes:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBirthdays();
+    fetchClasses();
+  }, [fetchBirthdays, fetchClasses]);
+
+  const diaHoje = new Date().getDate();
+  const semanaFim = diaHoje + 7;
+
+  const filtered = birthdays.filter(a => {
     const matchClass = filterClass === "Todas" || a.classe === filterClass;
-    const day = parseInt(a.nascimento.split("/")[0]);
-
+    
     let matchPeriod = true;
-    if (filterPeriod === "dia") matchPeriod = day === diaHoje;
-    if (filterPeriod === "semana") matchPeriod = day >= diaHoje && day <= semanaFim;
+    if (filterPeriod === "dia") matchPeriod = a.dia === diaHoje;
+    if (filterPeriod === "semana") matchPeriod = a.dia >= diaHoje && a.dia <= semanaFim;
 
     return matchClass && matchPeriod;
   });
 
-  const doDia = aniversariantes.filter(a => parseInt(a.nascimento.split("/")[0]) === diaHoje);
-  const daSemana = aniversariantes.filter(a => {
-    const d = parseInt(a.nascimento.split("/")[0]);
-    return d >= diaHoje && d <= semanaFim;
-  });
+  const doDia = birthdays.filter(a => a.dia === diaHoje);
+  const daSemana = birthdays.filter(a => a.dia >= diaHoje && a.dia <= semanaFim);
+
+  const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+  const currentMonthName = monthNames[new Date().getMonth()];
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="page-header">
         <h1 className="page-title">Aniversariantes</h1>
-        <p className="page-subtitle">Abril 2026</p>
+        <p className="page-subtitle">{currentMonthName} {new Date().getFullYear()}</p>
       </div>
 
       {/* Quick Stats */}
@@ -61,7 +93,7 @@ export default function AniversariantesPage() {
               <Cake className="h-6 w-6 text-pink-500" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-pink-600">{doDia.length}</p>
+              <p className="text-2xl font-bold text-pink-600">{loading ? "..." : doDia.length}</p>
               <p className="text-xs text-gray-500">Aniversariantes Hoje</p>
             </div>
           </CardContent>
@@ -72,7 +104,7 @@ export default function AniversariantesPage() {
               <Calendar className="h-6 w-6 text-purple-500" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-purple-600">{daSemana.length}</p>
+              <p className="text-2xl font-bold text-purple-600">{loading ? "..." : daSemana.length}</p>
               <p className="text-xs text-gray-500">Esta Semana</p>
             </div>
           </CardContent>
@@ -83,7 +115,7 @@ export default function AniversariantesPage() {
               <Gift className="h-6 w-6 text-blue-500" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-blue-600">{aniversariantes.length}</p>
+              <p className="text-2xl font-bold text-blue-600">{loading ? "..." : birthdays.length}</p>
               <p className="text-xs text-gray-500">Neste Mês</p>
             </div>
           </CardContent>
@@ -93,8 +125,8 @@ export default function AniversariantesPage() {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <Select value={filterPeriod} onValueChange={setFilterPeriod}>
-          <SelectTrigger className="w-48">
-            <SelectValue />
+          <SelectTrigger className="w-48 bg-white rounded-xl">
+            <SelectValue placeholder="Período" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="dia">Hoje</SelectItem>
@@ -103,68 +135,76 @@ export default function AniversariantesPage() {
           </SelectContent>
         </Select>
         <Select value={filterClass} onValueChange={setFilterClass}>
-          <SelectTrigger className="w-48">
-            <SelectValue />
+          <SelectTrigger className="w-48 bg-white rounded-xl">
+            <SelectValue placeholder="Todas as Classes" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="Todas">Todas as Classes</SelectItem>
-            <SelectItem value="Crianças">Crianças</SelectItem>
-            <SelectItem value="Adolescentes">Adolescentes</SelectItem>
-            <SelectItem value="Jovens">Jovens</SelectItem>
-            <SelectItem value="Homens">Homens</SelectItem>
-            <SelectItem value="Mulheres">Mulheres</SelectItem>
+            {availableClasses.map(cls => (
+              <SelectItem key={cls.id} value={cls.name}>{cls.name}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
 
       {/* Birthday List */}
-      <Card>
-        <CardHeader>
+      <Card className="border-none shadow-sm overflow-hidden rounded-3xl">
+        <CardHeader className="bg-white border-b border-gray-50">
           <CardTitle className="flex items-center gap-2">
             <Cake className="h-5 w-5 text-pink-500" />
             Aniversariantes ({filtered.length})
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          {filtered.length === 0 ? (
+        <CardContent className="p-6 bg-white">
+          {loading ? (
+            <div className="text-center py-12 text-gray-400">
+              <Loader2 className="h-10 w-10 animate-spin mx-auto mb-3 text-primary" />
+              <p>Buscando aniversariantes reais...</p>
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <Cake className="h-12 w-12 mx-auto mb-3 text-gray-300" />
               <p>Nenhum aniversariante no período selecionado</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filtered.map((a, i) => {
-                const isToday = parseInt(a.nascimento.split("/")[0]) === diaHoje;
+                const isToday = a.dia === diaHoje;
                 return (
                   <div
-                    key={a.nome}
-                    className={`flex items-center gap-3 p-4 rounded-xl transition-all animate-slide-up ${
+                    key={a.id}
+                    className={`flex items-center gap-4 p-5 rounded-2xl transition-all animate-slide-up ${
                       isToday
-                        ? "bg-gradient-to-r from-pink-50 to-amber-50 border-2 border-pink-200 shadow-sm"
-                        : "bg-gray-50 hover:bg-gray-100 border border-gray-200"
+                        ? "bg-gradient-to-r from-pink-50/50 to-amber-50/50 border-2 border-pink-200 shadow-md ring-1 ring-pink-100"
+                        : "bg-white hover:bg-gray-50 border border-gray-100 shadow-sm"
                     }`}
                     style={{ animationDelay: `${i * 50}ms` }}
                   >
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      isToday ? "bg-pink-500" : "bg-primary/10"
+                    <div className={`w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0 shadow-inner ${
+                      isToday ? "bg-pink-500 ring-4 ring-pink-100" : "bg-primary/5"
                     }`}>
                       {isToday ? (
-                        <Cake className="h-5 w-5 text-white" />
+                        <Cake className="h-6 w-6 text-white" />
                       ) : (
-                        <span className="text-sm font-bold text-primary">{a.nascimento.split("/")[0]}</span>
+                        <span className="text-lg font-black text-primary">{a.dia}</span>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{a.nome}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs text-gray-500">{a.nascimento}</span>
-                        <span className="text-xs text-gray-400">•</span>
-                        <span className="text-xs text-gray-500">{a.idade} anos</span>
+                      <p className="font-bold text-gray-900 truncate leading-tight">{a.nome}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs font-semibold text-gray-400">{a.nascimento}</span>
+                        <span className="text-xs text-gray-300">•</span>
+                        <span className="text-xs font-medium text-gray-500">{a.idade} anos</span>
                       </div>
-                      <Badge variant="secondary" className="mt-1 text-[10px]">{a.classe}</Badge>
+                      <Badge variant="secondary" className="mt-2 text-[10px] bg-gray-100 text-gray-600 border-none px-2 rounded-lg">
+                        <GraduationCap className="h-3 w-3 mr-1" />
+                        {a.classe}
+                      </Badge>
                     </div>
                     {isToday && (
-                      <span className="text-lg">🎂</span>
+                      <div className="bg-pink-100 w-10 h-10 rounded-full flex items-center justify-center animate-bounce text-xl">
+                        🎂
+                      </div>
                     )}
                   </div>
                 );
