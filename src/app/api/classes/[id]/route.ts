@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 
 // GET - Buscar classe por ID
@@ -8,6 +9,19 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const session = await auth();
+    
+    if (!session) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+
+    const role = (session.user as any).role;
+    const userClassId = (session.user as any).classId;
+
+    if (role === "PROFESSOR" && userClassId !== id) {
+      return NextResponse.json({ error: "Acesso negado a esta classe" }, { status: 403 });
+    }
+
     const cls = await prisma.class.findUnique({
       where: { id },
       include: {
@@ -34,6 +48,10 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await auth();
+    if (!session || (session.user as any).role !== "ADMIN") {
+      return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
+    }
     const { id } = await params;
     const body = await request.json();
     const { name, description, audience, active, status, professor, dirigente, viceDirigente } = body;
@@ -66,6 +84,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await auth();
+    if (!session || (session.user as any).role !== "ADMIN") {
+      return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
+    }
     const { id } = await params;
 
     // Soft delete check: only block if there are ACTIVE students? 

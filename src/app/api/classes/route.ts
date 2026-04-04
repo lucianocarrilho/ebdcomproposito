@@ -1,10 +1,25 @@
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 
 // GET - Listar classes
 export async function GET(request: NextRequest) {
   try {
+    const session = await auth();
+    if (!session) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+
+    const role = (session.user as any).role;
+    const classId = (session.user as any).classId;
+
+    const where: any = {};
+    if (role === "PROFESSOR" && classId) {
+      where.id = classId;
+    }
+
     const classes = await prisma.class.findMany({
+      where,
       include: {
         students: {
           where: { active: true },
@@ -38,6 +53,11 @@ export async function GET(request: NextRequest) {
 // POST - Criar classe
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth();
+    if (!session || (session.user as any).role !== "ADMIN") {
+      return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
+    }
+
     const body = await request.json();
     const { name, description, audience, active, professor, dirigente, viceDirigente } = body;
 

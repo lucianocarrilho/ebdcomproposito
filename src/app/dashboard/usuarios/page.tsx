@@ -21,6 +21,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 interface User {
   id: string;
@@ -32,6 +34,16 @@ interface User {
 }
 
 export default function UsuariosPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  
+  useEffect(() => {
+    if (status === "authenticated" && (session?.user as any)?.role !== "ADMIN") {
+      toast.error("Área restrita a administradores");
+      router.push("/dashboard");
+    }
+  }, [status, session, router]);
+
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Settings, Save, Church, Shield, Calendar, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,8 +9,21 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 export default function ConfiguracoesPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "authenticated" && (session?.user as any)?.role !== "ADMIN") {
+      toast.error("Área restrita a administradores");
+      router.push("/dashboard");
+    }
+  }, [status, session, router]);
+
   const [saved, setSaved] = useState(false);
   const [churchName, setChurchName] = useState("Igreja Assembleia de Deus");
   const [currentQuarter, setCurrentQuarter] = useState("2026-Q1");

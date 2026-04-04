@@ -25,27 +25,36 @@ import {
   Fingerprint,
 } from "lucide-react";
 
+import { useSession } from "next-auth/react";
+
 const navigation = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Classes", href: "/dashboard/classes", icon: GraduationCap },
-  { name: "Alunos", href: "/dashboard/alunos", icon: Users },
-  { name: "Liderança", href: "/dashboard/lideranca", icon: Crown },
-  { name: "Presença", href: "/dashboard/presenca", icon: ClipboardCheck },
-  { name: "Justificativas", href: "/dashboard/justificativas", icon: FileText },
-  { name: "Lições", href: "/dashboard/licoes", icon: BookOpen },
-  { name: "Visitantes", href: "/dashboard/visitantes", icon: UserPlus },
-  { name: "Destaques", href: "/dashboard/destaques", icon: Star },
-  { name: "Relatórios", href: "/dashboard/relatorios", icon: BarChart3 },
-  { name: "Calendário", href: "/dashboard/calendario", icon: Calendar },
-  { name: "Aniversariantes", href: "/dashboard/aniversariantes", icon: Cake },
-  { name: "Gestão de Acessos", href: "/dashboard/usuarios", icon: Fingerprint },
-  { name: "Configurações", href: "/dashboard/configuracoes", icon: Settings },
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
+  { name: "Classes", href: "/dashboard/classes", icon: GraduationCap, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "APOIO"] },
+  { name: "Alunos", href: "/dashboard/alunos", icon: Users, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
+  { name: "Liderança", href: "/dashboard/lideranca", icon: Crown, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "APOIO"] },
+  { name: "Presença", href: "/dashboard/presenca", icon: ClipboardCheck, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
+  { name: "Justificativas", href: "/dashboard/justificativas", icon: FileText, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
+  { name: "Lições", href: "/dashboard/licoes", icon: BookOpen, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
+  { name: "Visitantes", href: "/dashboard/visitantes", icon: UserPlus, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
+  { name: "Destaques", href: "/dashboard/destaques", icon: Star, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
+  { name: "Relatórios", href: "/dashboard/relatorios", icon: BarChart3, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "APOIO"] },
+  { name: "Calendário", href: "/dashboard/calendario", icon: Calendar, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
+  { name: "Aniversariantes", href: "/dashboard/aniversariantes", icon: Cake, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
+  { name: "Gestão de Acessos", href: "/dashboard/usuarios", icon: Fingerprint, roles: ["ADMIN"] },
+  { name: "Configurações", href: "/dashboard/configuracoes", icon: Settings, roles: ["ADMIN"] },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const userRole = (session?.user as any)?.role || "APOIO";
+
+  const filteredNavigation = navigation.filter(item => 
+    item.roles.includes(userRole)
+  );
 
   return (
     <>
@@ -117,7 +126,7 @@ export function Sidebar() {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
-          {navigation.map((item) => {
+          {filteredNavigation.map((item) => {
             const isActive = pathname === item.href || 
               (item.href !== "/dashboard" && pathname.startsWith(item.href));
             return (

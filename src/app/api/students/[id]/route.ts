@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { AttendanceStatus } from "@prisma/client";
 
@@ -8,6 +9,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await auth();
+    if (!session) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+
+    const userRole = (session.user as any).role;
+    const userClassId = (session.user as any).classId;
+
     const { id } = await params;
     const student = await prisma.student.findUnique({
       where: { id },
@@ -27,6 +36,11 @@ export async function GET(
 
     if (!student) {
       return NextResponse.json({ error: "Aluno não encontrado" }, { status: 404 });
+    }
+
+    // Enforcement: Professors can only see students from their own class
+    if (userRole === "PROFESSOR" && userClassId && student.classId !== userClassId) {
+      return NextResponse.json({ error: "Acesso negado a este aluno" }, { status: 403 });
     }
 
     // Calculate attendance stats
@@ -58,12 +72,34 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await auth();
+    if (!session) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+
+    const userRole = (session.user as any).role;
+    const userClassId = (session.user as any).classId;
+
     const { id } = await params;
+
+    // Check if professor can access this student
+    if (userRole === "PROFESSOR" && userClassId) {
+      const student = await prisma.student.findUnique({ where: { id }, select: { classId: true } });
+      if (!student || student.classId !== userClassId) {
+        return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+      }
+    }
+
     const body = await request.json();
-    const {
+    let {
       name, gender, birthDate, phone, address, guardian,
       classId, observations, baptized, member, newConvert, active, photo
     } = body;
+
+    // Enforcement: Professors cannot change student's class
+    if (userRole === "PROFESSOR" && userClassId) {
+      classId = userClassId;
+    }
 
     const updated = await prisma.student.update({
       where: { id },
@@ -98,7 +134,23 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await auth();
+    if (!session) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+
     const { id } = await params;
+    const userRole = (session.user as any).role;
+    const userClassId = (session.user as any).classId;
+
+    // Check if professor can access this student
+    if (userRole === "PROFESSOR" && userClassId) {
+      const student = await prisma.student.findUnique({ where: { id }, select: { classId: true } });
+      if (!student || student.classId !== userClassId) {
+        return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+      }
+    }
+
     await prisma.student.update({
       where: { id },
       data: { active: false },
