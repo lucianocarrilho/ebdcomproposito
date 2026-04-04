@@ -78,12 +78,12 @@ export function Sidebar() {
         <div className={cn("flex items-center h-20 px-4 border-b border-white/10", collapsed ? "justify-center" : "gap-3")}>
           {!collapsed && (
             <div className="flex items-center gap-3 flex-1 min-w-0">
-              <div className="w-14 h-10 bg-white rounded-lg flex items-center justify-center flex-shrink-0 shadow-lg overflow-hidden p-0.5">
+              <div className="w-20 h-12 bg-white rounded-lg flex items-center justify-center flex-shrink-0 shadow-lg overflow-hidden p-0.5">
                 <Image 
                   src="/logo.png" 
                   alt="Logo EBD" 
-                  width={56} 
-                  height={40} 
+                  width={80} 
+                  height={48} 
                   className="object-contain"
                 />
               </div>

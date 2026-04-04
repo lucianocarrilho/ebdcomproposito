@@ -54,12 +54,12 @@ export default function LoginPage() {
         </div>
 
         <div className="relative z-10 flex flex-col items-center justify-center w-full p-12 text-center">
-          <div className="w-56 h-32 bg-white rounded-2xl flex items-center justify-center mb-10 shadow-2xl animate-fade-in p-1 overflow-hidden border-4 border-white/20">
+          <div className="w-64 h-36 bg-white rounded-2xl flex items-center justify-center mb-10 shadow-2xl animate-fade-in p-1 overflow-hidden border-4 border-white/20">
             <Image 
               src="/logo.png" 
               alt="Logo EBD com Propósito" 
-              width={220} 
-              height={120} 
+              width={240} 
+              height={140} 
               className="object-contain"
             />
           </div>
@@ -100,12 +100,12 @@ export default function LoginPage() {
         <div className="w-full max-w-md animate-slide-up">
           {/* Mobile Logo */}
           <div className="lg:hidden flex flex-col items-center mb-8">
-            <div className="w-32 h-20 bg-white rounded-xl flex items-center justify-center mb-4 shadow-lg p-0.5 overflow-hidden border border-gray-100">
+            <div className="w-40 h-24 bg-white rounded-xl flex items-center justify-center mb-4 shadow-lg p-0.5 overflow-hidden border border-gray-100">
               <Image 
                 src="/logo.png" 
                 alt="Logo EBD" 
-                width={120} 
-                height={80} 
+                width={150} 
+                height={90} 
                 className="object-contain"
               />
             </div>
