@@ -14,6 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { useSession } from "next-auth/react";
 
 const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const weekDays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -27,6 +28,7 @@ const typeConfig: Record<string, { color: string; icon: React.ElementType; label
 };
 
 export default function CalendarioPage() {
+  const { data: session } = useSession();
   const [currentMonth, setCurrentMonth] = useState(new Date().getUTCMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getUTCFullYear());
   const [events, setEvents] = useState<any[]>([]);
@@ -106,9 +108,11 @@ export default function CalendarioPage() {
           <h1 className="page-title text-2xl font-extrabold text-gray-900">Agenda da EBD</h1>
           <p className="page-subtitle text-gray-500">Aulas, eventos e aniversariantes de {months[currentMonth]}</p>
         </div>
-        <Button onClick={() => setIsDialogOpen(true)} className="premium-button">
-          <Plus className="h-4 w-4 mr-2" /> Agendar Evento
-        </Button>
+        {(session?.user as any)?.role === "ADMIN" && (
+          <Button onClick={() => setIsDialogOpen(true)} className="premium-button">
+            <Plus className="h-4 w-4 mr-2" /> Agendar Evento
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
