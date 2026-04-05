@@ -45,12 +45,20 @@ export function Topbar() {
         <div className="h-8 w-px bg-gray-200 mx-1" />
 
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-            <User className="h-4 w-4 text-white" />
+          <div className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center overflow-hidden border-2 border-white shadow-sm ring-1 ring-gray-100">
+            {session?.user?.image ? (
+              <img 
+                src={session.user.image} 
+                alt={userName} 
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <User className="h-4 w-4 text-primary" />
+            )}
           </div>
           <div className="hidden sm:block text-left">
-            <p className="text-xs font-medium text-gray-900">{userName}</p>
-            <p className="text-[10px] text-gray-500">{roleLabels[userRole] || userRole}</p>
+            <p className="text-xs font-bold text-gray-900 leading-none">{userName}</p>
+            <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-tighter font-semibold">{roleLabels[userRole] || userRole}</p>
           </div>
         </div>
 

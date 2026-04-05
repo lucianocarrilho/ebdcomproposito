@@ -56,11 +56,13 @@ export default function UsuariosPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("APOIO");
-
+  const [image, setImage] = useState("");
+  const [uploading, setUploading] = useState(false);
+ 
   useEffect(() => {
     fetchUsers();
   }, []);
-
+ 
   async function fetchUsers() {
     try {
       const res = await fetch("/api/users");
@@ -73,46 +75,75 @@ export default function UsuariosPage() {
       setLoading(false);
     }
   }
-
+ 
   const handleOpenDialog = (user?: User) => {
     if (user) {
       setEditingUser(user);
       setName(user.name);
       setEmail(user.email);
       setRole(user.role);
+      setImage(user.image || "");
     } else {
       setEditingUser(null);
       setName("");
       setEmail("");
       setRole("APOIO");
+      setImage("");
     }
     setPassword("");
     setIsDialogOpen(true);
   };
-
+ 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+ 
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+ 
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+ 
+      if (!res.ok) throw new Error("Erro ao subir imagem");
+      const data = await res.json();
+      setImage(data.url);
+      toast.success("Foto enviada!");
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast.error("Falha ao subir foto");
+    } finally {
+      setUploading(false);
+    }
+  };
+ 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-
+ 
     const payload = {
       name,
       email,
       role,
+      image,
       password: password || undefined,
     };
-
+ 
     try {
       const url = editingUser ? `/api/users/${editingUser.id}` : "/api/users";
       const method = editingUser ? "PUT" : "POST";
-
+ 
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
+ 
       const data = await res.json();
-
+ 
       if (res.ok) {
         toast.success(editingUser ? "Usuário atualizado!" : "Usuário criado!");
         fetchUsers();
@@ -127,7 +158,7 @@ export default function UsuariosPage() {
       setSaving(false);
     }
   };
-
+ 
   const handleDelete = async () => {
     if (!deleteConfirm) return;
     try {
@@ -143,7 +174,7 @@ export default function UsuariosPage() {
       console.error("Erro ao deletar:", error);
     }
   };
-
+ 
   if (loading) {
     return (
       <div className="h-[60vh] flex flex-col items-center justify-center gap-4 text-gray-500">
@@ -152,7 +183,7 @@ export default function UsuariosPage() {
       </div>
     );
   }
-
+ 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -167,7 +198,7 @@ export default function UsuariosPage() {
           <UserPlus className="h-4 w-4" /> Novo Acesso
         </Button>
       </div>
-
+ 
       <div className="grid gap-6">
         <Card>
           <CardHeader>
@@ -189,11 +220,15 @@ export default function UsuariosPage() {
                   <TableRow key={user.id} className="hover:bg-gray-50/30 transition-colors">
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
-                          {user.name.charAt(0).toUpperCase()}
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold overflow-hidden border-2 border-white shadow-sm">
+                          {user.image ? (
+                            <img src={user.image} alt={user.name} className="w-full h-full object-cover" />
+                          ) : (
+                            user.name.charAt(0).toUpperCase()
+                          )}
                         </div>
                         <div>
-                          <p className="font-medium text-sm text-gray-900">{user.name}</p>
+                          <p className="font-bold text-sm text-gray-900">{user.name}</p>
                           <p className="text-xs text-gray-400">{user.email}</p>
                         </div>
                       </div>
@@ -240,7 +275,7 @@ export default function UsuariosPage() {
           </CardContent>
         </Card>
       </div>
-
+ 
       {/* Dialog Criar/Editar */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-md">
@@ -251,6 +286,27 @@ export default function UsuariosPage() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSave} className="space-y-4 pt-2">
+            {/* Foto Upload */}
+            <div className="flex flex-col items-center gap-2 pb-2">
+              <div className="w-20 h-20 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden relative group">
+                {image ? (
+                  <img src={image} alt="Preview" className="w-full h-full object-cover" />
+                ) : (
+                  <Users className="h-8 w-8 text-gray-300" />
+                )}
+                <label className="absolute inset-0 bg-black/40 text-white text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
+                  Alterar
+                  <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+                </label>
+                {uploading && (
+                  <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  </div>
+                )}
+              </div>
+              <p className="text-[10px] text-gray-400">Clique para subir a foto do professor</p>
+            </div>
+ 
             <div className="space-y-2">
               <Label htmlFor="userName">Nome do Gestor</Label>
               <div className="relative">
@@ -311,12 +367,12 @@ export default function UsuariosPage() {
                 />
               </div>
             </div>
-
+ 
             <DialogFooter className="pt-4">
-              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={saving}>
+              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={saving || uploading}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={saving}>
+              <Button type="submit" disabled={saving || uploading}>
                 {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {editingUser ? "Salvar Alterações" : "Criar Acesso"}
               </Button>

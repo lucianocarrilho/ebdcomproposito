@@ -108,7 +108,23 @@ model Leader {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   
+  attendance    LeaderAttendance[]
+  
   @@map("leaders")
+}
+ 
+model LeaderAttendance {
+  id            String    @id @default(cuid())
+  leaderId      String
+  leader        Leader    @relation(fields: [leaderId], references: [id])
+  date          DateTime
+  status        AttendanceStatus
+  justification String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+ 
+  @@unique([leaderId, date])
+  @@map("leader_attendance")
 }
 
 model Lesson {

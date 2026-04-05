@@ -10,12 +10,13 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, email, role, password } = body;
+    const { name, email, role, password, image } = body;
 
     const data: any = { 
       name: name as string, 
       email: email as string, 
       role: role as any,
+      image: image as string,
     };
     
     if (password && (password as string).trim() !== "") {

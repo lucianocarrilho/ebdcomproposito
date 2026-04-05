@@ -29,20 +29,20 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, email, password, role } = body;
-
+    const { name, email, password, role, image } = body;
+ 
     if (!name || !email || !password || !role) {
       return NextResponse.json({ error: "Todos os campos são obrigatórios" }, { status: 400 });
     }
-
+ 
     const existingUser = await prisma.user.findUnique({
       where: { email },
     });
-
+ 
     if (existingUser) {
       return NextResponse.json({ error: "Email já cadastrado" }, { status: 400 });
     }
-
+ 
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
       data: {
@@ -50,12 +50,14 @@ export async function POST(request: NextRequest) {
         email,
         password: hashedPassword,
         role,
+        image,
       },
       select: {
         id: true,
         name: true,
         email: true,
         role: true,
+        image: true,
       },
     });
 
