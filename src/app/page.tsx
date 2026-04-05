@@ -136,7 +136,6 @@ export default function LoginPage() {
                   type="email"
                   placeholder="seu@email.com"
                   required
-                  defaultValue="admin@ebdcomproposito.com"
                 />
               </div>
 
@@ -157,7 +156,6 @@ export default function LoginPage() {
                     type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
                     required
-                    defaultValue="admin123"
                     className="pr-10"
                   />
                   <button

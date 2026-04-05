@@ -25,7 +25,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ImageUpload } from "@/components/image-upload";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-
+import { useSession } from "next-auth/react";
+ 
 interface Leader {
   id: string;
   name: string;
@@ -52,6 +53,7 @@ interface AttendanceItem {
 }
 
 export default function LiderancaPage() {
+  const { data: session } = useSession();
   const [activeTab, setActiveTab] = useState<"quadro" | "presenca">("quadro");
   const [leaders, setLeaders] = useState<Leader[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
@@ -321,9 +323,11 @@ export default function LiderancaPage() {
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-primary" onClick={() => { setEditingLeader(l); setPhotoUrl(l.photo || ""); setIsDialogOpen(true); }}>
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-red-500" onClick={() => setDeleteConfirm(l.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {((session?.user as any)?.role !== "APOIO") && (
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-red-500" onClick={() => setDeleteConfirm(l.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -509,6 +513,31 @@ export default function LiderancaPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Confirmar Exclusão */}
+      <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+        <DialogContent className="max-w-sm text-center">
+          <DialogHeader>
+            <DialogTitle className="text-center font-bold text-red-600 border-red-100 pb-2 border-b">Confirmar Exclusão</DialogTitle>
+            <DialogDescription className="text-center pt-4 text-sm">
+              Tem certeza que deseja remover este líder? <br/>
+              <strong>Esta ação é irreversível e removerá o vínculo com as classes.</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 mt-6 justify-center">
+            <Button variant="outline" onClick={() => setDeleteConfirm(null)} className="flex-1 rounded-xl">
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex-1 rounded-xl shadow-lg shadow-red-100"
+              onClick={handleDelete}
+            >
+              Sim, Remover
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

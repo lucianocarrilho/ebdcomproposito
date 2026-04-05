@@ -13,6 +13,8 @@ import {
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -27,6 +29,16 @@ const reportTypes = [
 ];
 
 export default function RelatoriosPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "authenticated" && (session?.user as any)?.role === "PROFESSOR") {
+      toast.error("O acesso aos relatórios gerenciais é restrito à Secretaria e Direção");
+      router.push("/dashboard");
+    }
+  }, [status, session, router]);
+
   const [selectedReport, setSelectedReport] = useState("classe");
   const [dateFrom, setDateFrom] = useState(() => {
     const d = new Date();

@@ -16,7 +16,8 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-
+import { useSession } from "next-auth/react";
+ 
 interface ClassItem {
   id: string;
   name: string;
@@ -38,6 +39,7 @@ interface Leader {
 }
 
 export default function ClassesPage() {
+  const { data: session } = useSession();
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [leaders, setLeaders] = useState<Leader[]>([]);
   const [loading, setLoading] = useState(true);
@@ -273,14 +275,16 @@ export default function ClassesPage() {
                   <Edit className="h-3.5 w-3.5 mr-1" />
                   Editar
                 </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  title="Excluir classe"
-                  onClick={() => setDeleteConfirm(cls.id)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                {((session?.user as any)?.role !== "APOIO") && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    title="Excluir classe"
+                    onClick={() => setDeleteConfirm(cls.id)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
