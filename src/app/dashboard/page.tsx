@@ -112,7 +112,12 @@ export default function DashboardPage() {
   }
 
   if (!data) return null;
-
+ 
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+  const quarter = Math.floor(currentMonth / 3) + 1;
+  const quarterName = `${quarter}º Trimestre ${currentYear}`;
+ 
   const stats = [
     { label: "Total de Alunos", value: data.stats.totalStudents, icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
     { label: "Alunos Ativos", value: data.stats.activeStudents, icon: UserCheck, color: "text-emerald-600", bg: "bg-emerald-50" },
@@ -130,7 +135,7 @@ export default function DashboardPage() {
       <div className="page-header">
         <h1 className="page-title">Dashboard</h1>
         <p className="page-subtitle">
-          Visão geral da Escola Bíblica Dominical • 1º Trimestre 2026
+          Visão geral da Escola Bíblica Dominical • {quarterName}
         </p>
       </div>
 
