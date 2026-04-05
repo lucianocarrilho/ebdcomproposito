@@ -100,12 +100,12 @@ export default function UsuariosPage() {
  
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
- 
-      const res = await fetch("/api/upload", {
+      const res = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
         method: "POST",
-        body: formData,
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+        },
+        body: file,
       });
  
       if (!res.ok) throw new Error("Erro ao subir imagem");

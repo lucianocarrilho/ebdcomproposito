@@ -169,13 +169,16 @@ export default function LiderancaPage() {
     setSaving(true);
     try {
       const fd = new FormData(e.currentTarget);
+      const dateValue = fd.get("startDate") as string;
+      const startDate = dateValue ? new Date(dateValue).toISOString() : new Date().toISOString();
+
       const payload = {
         name: fd.get("name"),
         role: selectedRole,
         phone: fd.get("phone"),
         email: fd.get("email"),
         classId: selectedClass === "none" || selectedClass === "" ? null : selectedClass,
-        startDate: new Date(fd.get("startDate") as string).toISOString(),
+        startDate,
         observations: fd.get("observations"),
         photo: photoUrl,
       };
