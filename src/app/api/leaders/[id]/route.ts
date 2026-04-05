@@ -35,6 +35,20 @@ export async function PUT(
       },
     });
 
+    // Se salvou uma foto de líder e o ID corresponder a um usuário, atualiza a foto do usuário também
+    if (body.photo) {
+      try {
+        await prisma.user.update({
+          where: { id },
+          data: { image: body.photo }
+        });
+        console.log(`[Sync] Foto do usuário ${id} atualizada com sucesso.`);
+      } catch (e) {
+        // Se o ID não existir como usuário, apenas ignora
+        console.log(`[Sync] ID ${id} não é um usuário cadastrado, ignorando atualização de foto de perfil.`);
+      }
+    }
+
     return NextResponse.json(updated);
   } catch (error) {
     console.error("Erro ao atualizar líder:", error);
