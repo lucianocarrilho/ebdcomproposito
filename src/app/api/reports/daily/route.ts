@@ -5,8 +5,11 @@ import { AttendanceStatus } from "@prisma/client";
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const dateStr = searchParams.get("date") || new Date().toISOString().split("T")[0];
-  const date = new Date(dateStr);
-  date.setUTCHours(0, 0, 0, 0);
+  
+  // Usar split e Date.UTC para evitar deslocamento de fuso horário
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+  const nextDay = new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0, 0));
 
   try {
     // 1. Buscar todas as classes ativas (campo status no prisma)
@@ -17,13 +20,18 @@ export async function GET(request: NextRequest) {
           select: { students: { where: { active: true } } }
         },
         attendanceRecords: {
-          where: { date: { gte: date, lt: new Date(date.getTime() + 86400000) } },
+          where: { 
+            date: { 
+              gte: date, 
+              lt: nextDay 
+            } 
+          },
           include: {
             items: true
           }
         },
         visitors: {
-          where: { date: { gte: date, lt: new Date(date.getTime() + 86400000) } }
+          where: { date: { gte: date, lt: nextDay } }
         }
       },
       orderBy: { name: "asc" }
