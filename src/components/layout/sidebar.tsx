@@ -39,6 +39,7 @@ const navigation = [
   { name: "Destaques", href: "/dashboard/destaques", icon: Star, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
   { name: "Relatórios", href: "/dashboard/relatorios", icon: BarChart3, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "APOIO"] },
   { name: "Calendário", href: "/dashboard/calendario", icon: Calendar, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
+  { name: "Mapa do Dia", href: "/dashboard/resumo-dia", icon: BarChart3, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "APOIO"] },
   { name: "Aniversariantes", href: "/dashboard/aniversariantes", icon: Cake, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
   { name: "Gestão de Acessos", href: "/dashboard/usuarios", icon: Fingerprint, roles: ["ADMIN"] },
   { name: "Configurações", href: "/dashboard/configuracoes", icon: Settings, roles: ["ADMIN"] },
