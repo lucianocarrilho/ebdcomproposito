@@ -10,15 +10,26 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
-    const updated = await prisma.leader.update({
+    const updated = await prisma.leader.upsert({
       where: { id },
-      data: {
+      update: {
         name: body.name,
         role: body.role,
         phone: body.phone,
         email: body.email,
         class: body.classId && body.classId !== "none" ? { connect: { id: body.classId } } : { disconnect: true },
         startDate: body.startDate ? new Date(body.startDate) : undefined,
+        observations: body.observations,
+        photo: body.photo,
+      },
+      create: {
+        id,
+        name: body.name,
+        role: body.role,
+        phone: body.phone,
+        email: body.email,
+        class: body.classId && body.classId !== "none" ? { connect: { id: body.classId } } : undefined,
+        startDate: body.startDate ? new Date(body.startDate) : new Date(),
         observations: body.observations,
         photo: body.photo,
       },

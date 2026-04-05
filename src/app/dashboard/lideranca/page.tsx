@@ -191,14 +191,18 @@ export default function LiderancaPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
+ 
       if (res.ok) {
         toast.success(editingLeader ? "Cadastro atualizado!" : "Líder cadastrado!");
-        fetchData();
         setIsDialogOpen(false);
+        fetchData();
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        toast.error(errorData.error || "Erro ao salvar líder. Verifique se o ID existe como líder.");
       }
     } catch (error) {
-      toast.error("Erro ao salvar");
+      console.error("Erro no salvamento:", error);
+      toast.error("Erro de conexão ao servidor");
     } finally {
       setSaving(false);
     }

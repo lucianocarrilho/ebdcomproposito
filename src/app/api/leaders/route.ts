@@ -13,10 +13,9 @@ export async function GET(request: NextRequest) {
 
     const manualLeaders = await prisma.leader.findMany({
       where: leaderWhere,
-      select: { id: true, name: true, role: true },
       orderBy: { name: "asc" },
     });
-
+ 
     // 2. Buscar da tabela de Usuários (Gestão de Acesso)
     // Somente se não estivermos filtrando por algo que não seja professor/admin
     const users = await prisma.user.findMany({
@@ -24,14 +23,16 @@ export async function GET(request: NextRequest) {
         role: { in: ["ADMIN", "PROFESSOR"] },
         active: true,
       },
-      select: { id: true, name: true, role: true },
+      select: { id: true, name: true, role: true, email: true, image: true },
     });
-
+ 
     // Converter cargos de User para o formato de Leader
     const userLeaders = users.map(u => ({
       id: u.id,
       name: u.name,
       role: u.role === "PROFESSOR" ? "PROFESSOR" : "DIRIGENTE",
+      email: u.email,
+      photo: u.image,
     }));
 
     // 3. Juntar e remover duplicados pelo nome
