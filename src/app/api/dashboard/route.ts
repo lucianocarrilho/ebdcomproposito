@@ -32,7 +32,10 @@ export async function GET() {
       allowedClassIds = teacherClasses.map(c => c.id);
     }
 
-    const studentWhere = allowedClassIds ? { classId: { in: allowedClassIds } } : {};
+    const studentWhere = allowedClassIds 
+      ? { classId: { in: allowedClassIds }, active: true } 
+      : { active: true };
+
     const classWhere = allowedClassIds ? { id: { in: allowedClassIds }, status: true } : { status: true };
 
     // Totals
