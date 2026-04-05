@@ -116,17 +116,23 @@ export async function POST(request: NextRequest) {
     );
 
     for (const item of justifiedItems) {
-      await prisma.absenceJustification.upsert({
+      // Verificar se já existe justificativa para este aluno nesta data
+      const existing = await prisma.absenceJustification.findFirst({
         where: {
-          id: "temp", // will always create
-        },
-        create: {
           studentId: item.studentId,
           date: parsedDate,
-          reason: "Falta justificada via chamada",
         },
-        update: {},
       });
+
+      if (!existing) {
+        await prisma.absenceJustification.create({
+          data: {
+            studentId: item.studentId,
+            date: parsedDate,
+            reason: "Falta justificada via chamada",
+          },
+        });
+      }
     }
 
     return NextResponse.json({ success: true, recordId: record.id });
