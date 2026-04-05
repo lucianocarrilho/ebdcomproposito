@@ -1,12 +1,12 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Bell, Search, User, LogOut } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getGreeting } from "@/lib/utils";
-
+ 
 const roleLabels: Record<string, string> = {
   ADMIN: "Administrador",
   DIRIGENTE: "Dirigente",
@@ -14,11 +14,33 @@ const roleLabels: Record<string, string> = {
   PROFESSOR: "Professor",
   APOIO: "Apoio/Secretaria",
 };
-
+ 
 export function Topbar() {
   const { data: session } = useSession();
+  const [liveImage, setLiveImage] = useState<string | null>(null);
   const userName = session?.user?.name || "Usuário";
   const userRole = (session?.user as Record<string, unknown>)?.role as string || "APOIO";
+ 
+  // Buscar foto atualizada para contornar cache da sessão
+  useEffect(() => {
+    async function syncUserPhoto() {
+      if (session?.user?.email) {
+        try {
+          const res = await fetch("/api/users");
+          const users = await res.json();
+          const currentUser = users.find((u: any) => u.email === session?.user?.email);
+          if (currentUser?.image) {
+            setLiveImage(currentUser.image);
+          }
+        } catch (e) {
+          console.error("Erro ao sincronizar foto:", e);
+        }
+      }
+    }
+    syncUserPhoto();
+  }, [session]);
+ 
+  const userImage = liveImage || session?.user?.image;
 
   return (
     <header className="sticky top-0 z-30 h-16 bg-white/80 backdrop-blur-md border-b border-gray-200 flex items-center justify-between px-4 lg:px-8">
@@ -46,9 +68,9 @@ export function Topbar() {
 
         <div className="flex items-center gap-2">
           <div className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center overflow-hidden border-2 border-white shadow-sm ring-1 ring-gray-100">
-            {session?.user?.image ? (
+            {userImage ? (
               <img 
-                src={session.user.image} 
+                src={userImage} 
                 alt={userName} 
                 className="w-full h-full object-cover"
               />
