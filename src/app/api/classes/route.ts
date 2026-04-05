@@ -40,7 +40,9 @@ export async function GET(request: NextRequest) {
     const formatted = classes.map((cls) => ({
       ...cls,
       active: cls.status,
-      studentCount: cls.students.length,
+      _count: {
+        students: cls.students.length,
+      },
       // Usar campos diretos da classe, se existirem, ou o primeiro líder com esse cargo como backup
       professor: cls.professor || cls.leaders.find((l) => l.role === "Professor")?.name || "",
       dirigente: cls.dirigente || cls.leaders.find((l) => l.role === "Dirigente")?.name || "",
