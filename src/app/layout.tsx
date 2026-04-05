@@ -6,6 +6,17 @@ export const metadata: Metadata = {
   title: "EBD com Propósito - Organização a serviço do Reino",
   description: "Sistema completo para gestão da Escola Bíblica Dominical. Controle presença, alunos, classes, lições e muito mais.",
   keywords: "EBD, Escola Bíblica Dominical, gestão, igreja, presença, alunos",
+  openGraph: {
+    title: "EBD com Propósito - Organização a serviço do Reino",
+    description: "Sistema completo para gestão da EBD. Controle presença, alunos, lições e muito mais.",
+    images: [{ url: '/logo_ebd.png' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: "EBD com Propósito - Organização a serviço do Reino",
+    description: "Sistema completo para gestão da EBD.",
+    images: ['/logo_ebd.png'],
+  },
 };
 
 export default function RootLayout({
