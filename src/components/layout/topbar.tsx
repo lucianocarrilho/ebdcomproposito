@@ -40,9 +40,6 @@ export function Topbar() {
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="h-5 w-5 text-gray-500" />
-          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-accent text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-            3
-          </span>
         </Button>
 
         <div className="h-8 w-px bg-gray-200 mx-1" />
