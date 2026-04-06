@@ -36,6 +36,7 @@ model User {
   classId       String?
   class         Class?    @relation("UserClass", fields: [classId], references: [id])
   justifications AbsenceJustification[]
+  sentNotifications Notification[] @relation("SentNotifications")
   
   @@map("users")
 }
@@ -281,10 +282,12 @@ model Notification {
   message     String   @db.Text
   type        String   @default("info") // info, warning, birthday, success
   userId      String?  // If null, it's global
+  senderId    String?  // Who sent the notification
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   expiresAt   DateTime?
   
+  sender      User?    @relation("SentNotifications", fields: [senderId], references: [id])
   reads       NotificationRead[]
   
   @@map("notifications")

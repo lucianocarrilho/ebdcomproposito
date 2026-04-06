@@ -28,10 +28,13 @@ export async function GET(req: Request) {
       include: {
         reads: {
           where: { userId: userId }
+        },
+        sender: {
+          select: { name: true, image: true }
         }
       },
       orderBy: { createdAt: "desc" },
-      take: 10
+      take: 20
     });
 
     // 2. Dynamic Birthday Check (7-day window)
@@ -78,17 +81,23 @@ export async function GET(req: Request) {
     // Combine and format
     const finalNotifications = [
        {
-         id: "welcome-notice",
-         title: "✨ Bem-vindo ao Novo Painel!",
-         message: "Aqui Amara, você verá avisos da secretaria e aniversariantes da sua classe.",
+         id: "system-notice",
+         title: "✨ Central de Alertas Online",
+         message: `Sistema ativo em ${new Date().toLocaleTimeString()}. Amara, se você lê isto, o sistema está OK!`,
          type: "success",
          createdAt: new Date(),
-         isRead: false
+         isRead: false,
+         senderName: "Secretaria EBD"
        },
        ...birthdayNotifications,
        ...dbNotifications.map(n => ({
-          ...n,
-          isRead: n.reads.length > 0
+          id: n.id,
+          title: n.title,
+          message: n.message,
+          type: n.type,
+          createdAt: n.createdAt,
+          isRead: n.reads.length > 0,
+          senderName: (n as any).sender?.name || "Administração"
        }))
     ];
 
@@ -115,6 +124,7 @@ export async function POST(req: Request) {
         message,
         type: type || "info",
         userId: targetUserId || null,
+        senderId: (session.user as any).id,
         expiresAt: expiresAt ? new Date(expiresAt) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days default
       }
     });

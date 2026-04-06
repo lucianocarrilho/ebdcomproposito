@@ -108,7 +108,14 @@ export function NotificationTray() {
                       {getIcon(n.type)}
                     </div>
                     <div className="flex-1">
-                      <p className="text-xs font-bold text-gray-900 mb-0.5">{n.title}</p>
+                      <div className="flex items-center justify-between gap-2 mb-0.5">
+                        <p className="text-xs font-bold text-gray-900">{n.title}</p>
+                        {n.senderName && (
+                          <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-md font-bold truncate max-w-[120px] border border-blue-100">
+                            Por: {n.senderName}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-gray-600 leading-relaxed">{n.message}</p>
                       <p className="text-[10px] text-gray-400 mt-2 font-medium">
                         {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
