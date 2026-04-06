@@ -6,6 +6,7 @@ import { signOut, useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getGreeting } from "@/lib/utils";
+import { NotificationTray } from "./NotificationTray";
  
 const roleLabels: Record<string, string> = {
   ADMIN: "Administrador",
@@ -60,9 +61,7 @@ export function Topbar() {
 
       {/* Right - Actions */}
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5 text-gray-500" />
-        </Button>
+        <NotificationTray />
 
         <div className="h-8 w-px bg-gray-200 mx-1" />
 
