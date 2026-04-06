@@ -65,15 +65,19 @@ function getQuarters() {
 // Calcular as 13 datas de domingo a partir do início do trimestre
 function getSundayDates(quarterStart: string): string[] {
   const dates: string[] = [];
-  const start = new Date(quarterStart);
-  // Ajustar para o próximo domingo se não for domingo
-  const day = start.getDay();
+  // Parse year, month, day to avoid timezone shifts
+  const [y, m, d_val] = quarterStart.split('-').map(Number);
+  const start = new Date(Date.UTC(y, m - 1, d_val));
+  
+  // Ajustar para o próximo domingo se não for domingo (getDay em UTC)
+  const day = start.getUTCDay();
   if (day !== 0) {
-    start.setDate(start.getDate() + (7 - day));
+    start.setUTCDate(start.getUTCDate() + (7 - day));
   }
+  
   for (let i = 0; i < 13; i++) {
     const d = new Date(start);
-    d.setDate(d.getDate() + i * 7);
+    d.setUTCDate(d.getUTCDate() + i * 7);
     dates.push(d.toISOString().split("T")[0]);
   }
   return dates;
@@ -177,8 +181,15 @@ export default function LicoesPage() {
   const fetchLessons = useCallback(async () => {
     if (!classesLoaded || !selectedCategory) return;
     setLoading(true);
+    
+    // Mapeamento para busca: Se buscar Homens/Mulheres, buscar na verdade a revista "Adultos"
+    let fetchCat = selectedCategory;
+    if (["Homens", "Mulheres"].includes(selectedCategory)) {
+      fetchCat = "Adultos";
+    }
+
     try {
-      const res = await fetch(`/api/lessons?quarter=${selectedQuarter}&category=${selectedCategory}`, {
+      const res = await fetch(`/api/lessons?quarter=${selectedQuarter}&category=${fetchCat}`, {
         cache: "no-store",
         headers: { "Cache-Control": "no-cache" }
       });
@@ -221,11 +232,17 @@ export default function LicoesPage() {
       const lessonNumber = Number(fd.get("number"));
       const dateValue = fd.get("date") as string;
       
+      // Mapeamento Inteligente: Se for classe Homens ou Mulheres, salvar como "Adultos"
+      let saveCategory = selectedCategory;
+      if (["Homens", "Mulheres"].includes(selectedCategory)) {
+        saveCategory = "Adultos";
+      }
+
       const payload = {
         number: lessonNumber,
         title: fd.get("title"),
         quarter: selectedQuarter,
-        category: selectedCategory,
+        category: saveCategory,
         date: dateValue || null,
         bibleText: fd.get("bibleText"),
         summary: fd.get("summary"),
