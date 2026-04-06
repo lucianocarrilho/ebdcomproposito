@@ -442,19 +442,29 @@ export default function RelatoriosPage() {
       {/* Filters */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-3 items-end">
-            <div className="space-y-1 flex-1">
-              <Label className="text-xs">Data Início</Label>
-              <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+          <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-end w-full">
+            <div className="space-y-1.5 flex-1">
+              <Label className="text-xs font-bold uppercase tracking-wider text-gray-400">Data Início</Label>
+              <Input 
+                type="date" 
+                value={dateFrom} 
+                onChange={e => setDateFrom(e.target.value)} 
+                className="h-12 sm:h-10 rounded-xl sm:rounded-md shadow-sm"
+              />
             </div>
-            <div className="space-y-1 flex-1">
-              <Label className="text-xs">Data Fim</Label>
-              <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+            <div className="space-y-1.5 flex-1">
+              <Label className="text-xs font-bold uppercase tracking-wider text-gray-400">Data Fim</Label>
+              <Input 
+                type="date" 
+                value={dateTo} 
+                onChange={e => setDateTo(e.target.value)} 
+                className="h-12 sm:h-10 rounded-xl sm:rounded-md shadow-sm"
+              />
             </div>
-            <div className="space-y-1 flex-1">
-              <Label className="text-xs">Classe</Label>
+            <div className="space-y-1.5 flex-1">
+              <Label className="text-xs font-bold uppercase tracking-wider text-gray-400">Classe</Label>
               <Select value={selectedClass} onValueChange={setSelectedClass}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full h-12 sm:h-10 rounded-xl sm:rounded-md shadow-sm">
                   <SelectValue placeholder="Selecione uma Classe" />
                 </SelectTrigger>
                 <SelectContent>
@@ -467,16 +477,20 @@ export default function RelatoriosPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 mt-2 sm:mt-0 w-full sm:w-auto">
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="h-10 hover:bg-primary/5 hover:text-primary transition-all"
+                className="flex-1 sm:w-auto h-12 sm:h-10 rounded-xl sm:rounded-md hover:bg-primary/5 hover:text-primary transition-all font-bold sm:font-normal"
                 onClick={handleExportPDF}
               >
                 <FileText className="h-4 w-4 mr-2" /> PDF
               </Button>
-              <Button variant="outline" size="sm" className="h-10">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex-1 sm:w-auto h-12 sm:h-10 rounded-xl sm:rounded-md hover:bg-emerald-50 hover:text-emerald-600 transition-all font-bold sm:font-normal"
+              >
                 <Download className="h-4 w-4 mr-2" /> Excel
               </Button>
             </div>
