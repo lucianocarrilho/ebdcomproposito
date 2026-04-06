@@ -8,10 +8,15 @@ export async function GET() {
     if (!session || !session.user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
     const userId = (session.user as any).id;
+    const userEmail = session.user.email;
 
     const notifications = await prisma.notification.findMany({
       where: {
-        senderId: userId
+        active: true,
+        OR: [
+          { senderId: userId },
+          { sender: { email: userEmail } }
+        ]
       },
       include: {
         reads: {
