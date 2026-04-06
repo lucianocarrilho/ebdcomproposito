@@ -35,13 +35,17 @@ import { ImageUpload } from "@/components/image-upload";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 
-// Categorias de revistas da EBD
-const CATEGORIES = [
-  { id: "Adultos", label: "Adultos", icon: "👨‍👩‍👦", description: "Homens e Mulheres" },
-  { id: "Jovens", label: "Jovens", icon: "🧑", description: "Classe de Jovens" },
-  { id: "Adolescentes", label: "Adolescentes", icon: "👦", description: "Classe de Adolescentes" },
-  { id: "Crianças", label: "Crianças", icon: "🧒", description: "Classe de Crianças" },
-];
+// Categorias de revistas da EBD (Ícones padrão para nomes comuns)
+const CATEGORY_ICONS: Record<string, string> = {
+  "Adultos": "👨‍👩‍👦",
+  "Jovens": "🧑",
+  "Adolescentes": "👦",
+  "Crianças": "🧒",
+  "Discipulado": "📖",
+  "Homens": "👨",
+  "Mulheres": "👩",
+  "Geral": "📚"
+};
 
 // Gerar lista de trimestres
 function getQuarters() {
@@ -150,16 +154,16 @@ export default function LicoesPage() {
         const res = await fetch("/api/classes");
         if (res.ok) {
           const data = await res.json();
-          setUserClasses(data);
+          const activeClasses = Array.isArray(data) ? data.filter((c: any) => c.status !== false) : [];
+          setUserClasses(activeClasses);
           
-          // Se for professor, mudar a categoria inicial para a primeira disponível
-          const role = (session?.user as any)?.role;
-          if (role === "PROFESSOR") {
-            const allowed = CATEGORIES.filter(cat => 
-              data.some((cls: any) => cls.name.toLowerCase().includes(cat.id.toLowerCase().substring(0, 5)))
-            );
-            if (allowed.length > 0 && !allowed.find(a => a.id === selectedCategory)) {
-              setSelectedCategory(allowed[0].id);
+          // Se não houver categoria selecionada ou a atual não existir mais, selecionar a primeira
+          if (activeClasses.length > 0) {
+            const exists = activeClasses.some((c: any) => c.name === selectedCategory);
+            if (!exists && selectedCategory !== "Adultos") {
+              setSelectedCategory(activeClasses[0].name);
+            } else if (selectedCategory === "Adultos" && !activeClasses.some((c: any) => c.name === "Adultos")) {
+              setSelectedCategory(activeClasses[0].name);
             }
           }
         }
@@ -300,15 +304,26 @@ export default function LicoesPage() {
 
   const currentQuarterLabel = quarters.find(q => q.value === selectedQuarter)?.label || selectedQuarter;
 
-  const filteredCategories = CATEGORIES.filter(cat => {
-    const role = (session?.user as any)?.role;
-    if (role === "ADMIN") return true;
-    
-    // Para professores, mostramos apenas categorias que batem com o nome das classes deles
-    return userClasses.some((cls: any) => 
-      cls.name.toLowerCase().includes(cat.id.toLowerCase().substring(0, 5))
-    );
+  const filteredCategories = userClasses.map(cls => {
+    const name = cls.name;
+    let icon = "📚";
+    // Tentar encontrar um ícone que combine com o nome da classe
+    for (const [key, val] of Object.entries(CATEGORY_ICONS)) {
+      if (name.toLowerCase().includes(key.toLowerCase().substring(0, 4))) {
+        icon = val;
+        break;
+      }
+    }
+    return {
+      id: name,
+      label: name,
+      icon: icon,
+      description: cls.description || `Lições da classe ${name}`
+    };
   });
+
+  // Garantir que não haja duplicatas de ID (caso existam classes com mesmo nome, o que não deve ocorrer)
+  const categories = Array.from(new Map(filteredCategories.map(c => [c.id, c])).values());
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -345,7 +360,7 @@ export default function LicoesPage() {
 
       {/* Abas de Categoria (Revista) */}
       <div className="flex gap-2 overflow-x-auto pb-1">
-        {filteredCategories.map(cat => (
+        {categories.map(cat => (
           <button
             key={cat.id}
             onClick={() => setSelectedCategory(cat.id)}
