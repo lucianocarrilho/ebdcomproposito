@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/notifications
 // Retrieves active notifications for the current user and check for upcoming birthdays
 export async function GET(req: Request) {

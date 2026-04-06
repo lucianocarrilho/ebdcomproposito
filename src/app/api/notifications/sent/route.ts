@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const session = await auth();
@@ -9,13 +11,15 @@ export async function GET() {
 
     const userId = (session.user as any).id;
     const userEmail = session.user.email;
+    const userName = session.user.name;
 
     const notifications = await prisma.notification.findMany({
       where: {
         active: true,
         OR: [
           { senderId: userId },
-          { sender: { email: userEmail } }
+          { sender: { email: userEmail } },
+          { sender: { name: userName } }
         ]
       },
       include: {
