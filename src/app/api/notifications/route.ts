@@ -77,6 +77,14 @@ export async function GET(req: Request) {
 
     // Combine and format
     const finalNotifications = [
+       {
+         id: "welcome-notice",
+         title: "✨ Bem-vindo ao Novo Painel!",
+         message: "Aqui Amara, você verá avisos da secretaria e aniversariantes da sua classe.",
+         type: "success",
+         createdAt: new Date(),
+         isRead: false
+       },
        ...birthdayNotifications,
        ...dbNotifications.map(n => ({
           ...n,
