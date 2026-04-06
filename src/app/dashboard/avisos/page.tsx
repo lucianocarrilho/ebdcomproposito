@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Send, MessageSquare, AlertTriangle, CheckCircle2, Info, Loader2, Trash2, Eye } from "lucide-react";
+import { Send, MessageSquare, AlertTriangle, CheckCircle2, Info, Loader2, Trash2, Eye, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,13 +22,17 @@ export default function AvisosPage() {
 
   const fetchHistory = async () => {
     try {
-      const res = await fetch("/api/notifications/sent");
+      setLoadingHistory(true);
+      // Adding a timestamp to prevent browser cache
+      const res = await fetch(`/api/notifications/sent?t=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
         setSentAvisos(data);
+      } else {
+        console.error("Erro ao buscar histórico");
       }
     } catch (error) {
-      console.error("Erro ao carregar histórico");
+      console.error(error);
     } finally {
       setLoadingHistory(false);
     }
@@ -36,6 +40,9 @@ export default function AvisosPage() {
 
   useEffect(() => {
     fetchHistory();
+    // Auto refresh every 30s to keep sync
+    const interval = setInterval(fetchHistory, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleSend = async (e: React.FormEvent) => {
@@ -57,7 +64,8 @@ export default function AvisosPage() {
         toast.success("Aviso enviado com sucesso!");
         setTitle("");
         setMessage("");
-        fetchHistory(); // Refresh history
+        // Wait a bit before fetching to let DB settle if needed
+        setTimeout(fetchHistory, 800);
       } else {
         toast.error("Erro ao enviar aviso");
       }
@@ -83,56 +91,56 @@ export default function AvisosPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-12 animate-fade-in pb-20">
+    <div className="max-w-6xl mx-auto space-y-12 animate-fade-in pb-20">
       <div className="page-header">
-        <h1 className="page-title flex items-center gap-3">
-          <MessageSquare className="h-6 w-6 text-primary" />
+        <h1 className="page-title flex items-center gap-3 text-3xl font-black">
+          <MessageSquare className="h-8 w-8 text-primary" />
           Central de Comunicados
         </h1>
-        <p className="page-subtitle text-lg">Gerencie e envie mensagens instantâneas para a escola</p>
+        <p className="page-subtitle text-lg text-gray-500">Gerencie e envie mensagens instantâneas para a escola</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Formulário de Envio */}
         <div className="lg:col-span-7 space-y-6">
-          <Card className="border-none shadow-premium overflow-hidden">
-            <CardHeader className="bg-primary text-white text-center py-10">
-              <CardTitle className="text-white text-2xl font-bold">Novo Comunicado</CardTitle>
-              <CardDescription className="text-white/90 text-sm">O aviso será disparado com som para todos os alvos.</CardDescription>
+          <Card className="border-none shadow-premium overflow-hidden border-t-4 border-primary">
+            <CardHeader className="bg-primary text-white text-center py-12">
+              <CardTitle className="text-white text-3xl font-black mb-2">Novo Comunicado</CardTitle>
+              <CardDescription className="text-white/90 text-sm font-medium">O aviso será disparado com som para toda a equipe logada.</CardDescription>
             </CardHeader>
-            <CardContent className="p-6">
+            <CardContent className="p-8">
               <form onSubmit={handleSend} className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="title" className="font-bold text-gray-700">O que é o comunicado?</Label>
+                  <Label htmlFor="title" className="font-bold text-gray-700 text-base">O que é o comunicado?</Label>
                   <Input 
                     id="title" 
                     placeholder="Título curto e direto..." 
                     value={title}
                     onChange={e => setTitle(e.target.value)}
-                    className="h-12 rounded-xl focus-visible:ring-primary"
+                    className="h-14 rounded-2xl text-lg border-gray-200 focus-visible:ring-primary shadow-sm"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="font-bold text-gray-700">Gravidade do Alerta</Label>
+                  <Label className="font-bold text-gray-700 text-base">Gravidade do Alerta</Label>
                   <Select value={type} onValueChange={setType}>
-                    <SelectTrigger className="h-12 rounded-xl">
+                    <SelectTrigger className="h-14 rounded-2xl text-base border-gray-200 shadow-sm focus:ring-primary">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-2xl">
                       <SelectItem value="info">
                         <div className="flex items-center gap-2">
-                          <Info className="h-4 w-4 text-blue-500" /> Informativo Comum
+                          <Info className="h-5 w-5 text-blue-500" /> Informativo Comum
                         </div>
                       </SelectItem>
                       <SelectItem value="warning">
                         <div className="flex items-center gap-2">
-                          <AlertTriangle className="h-4 w-4 text-amber-500" /> Urgente / Mudança de Plano
+                          <AlertTriangle className="h-5 w-5 text-amber-500" /> Urgente / Mudança de Plano
                         </div>
                       </SelectItem>
                       <SelectItem value="success">
                         <div className="flex items-center gap-2">
-                          <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Comemoração / Positivo
+                          <CheckCircle2 className="h-5 w-5 text-emerald-500" /> Comemoração / Positivo
                         </div>
                       </SelectItem>
                     </SelectContent>
@@ -140,29 +148,29 @@ export default function AvisosPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="message" className="font-bold text-gray-700">Instruções Detalhadas</Label>
+                  <Label htmlFor="message" className="font-bold text-gray-700 text-base">Instruções Detalhadas</Label>
                   <Textarea 
                     id="message" 
                     placeholder="Escreva aqui os detalhes..." 
                     rows={6}
                     value={message}
                     onChange={e => setMessage(e.target.value)}
-                    className="rounded-2xl resize-none p-4 focus-visible:ring-primary"
+                    className="rounded-3xl resize-none p-5 text-base border-gray-200 focus-visible:ring-primary shadow-sm min-h-[180px]"
                   />
                 </div>
 
                 <Button 
                   type="submit" 
                   disabled={sending} 
-                  className="w-full h-14 text-lg font-bold rounded-2xl shadow-xl shadow-primary/20 bg-primary hover:bg-primary-light transition-all"
+                  className="w-full h-16 text-xl font-black rounded-2xl shadow-2xl shadow-primary/30 bg-primary hover:bg-primary-dark hover:scale-[1.01] active:scale-95 transition-all"
                 >
                   {sending ? (
                     <>
-                      <Loader2 className="h-5 w-5 animate-spin mr-2" /> Disparando...
+                      <Loader2 className="h-6 w-6 animate-spin mr-3" /> Disparando...
                     </>
                   ) : (
                     <>
-                      <Send className="h-5 w-5 mr-2" /> Enviar Agora
+                      <Send className="h-6 w-6 mr-3" /> DISPARAR AGORA
                     </>
                   )}
                 </Button>
@@ -173,59 +181,64 @@ export default function AvisosPage() {
 
         {/* Histórico e Métricas */}
         <div className="lg:col-span-5 space-y-6">
-          <Card className="border-none shadow-premium h-full">
-            <CardHeader>
-              <CardTitle className="text-sm font-bold flex items-center justify-between">
+          <Card className="border-none shadow-premium h-full bg-white/50 backdrop-blur-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-black flex items-center justify-between text-gray-400 uppercase tracking-widest">
                 Histórico Recente
-                {loadingHistory && <Loader2 className="h-4 w-4 animate-spin" />}
+                <div className="flex items-center gap-3">
+                  {loadingHistory && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+                  <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10 rounded-full" onClick={fetchHistory}>
+                    <RefreshCw className="h-4 w-4 text-primary" />
+                  </Button>
+                </div>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="max-h-[600px] overflow-y-auto px-4 pb-4 space-y-3">
+              <div className="max-h-[750px] overflow-y-auto px-5 pb-8 space-y-4">
                 {sentAvisos.length === 0 && !loadingHistory && (
-                  <div className="py-12 text-center text-gray-400">
-                    <MessageSquare className="h-10 w-10 mx-auto opacity-20 mb-2" />
-                    <p className="text-sm">Nenhum aviso enviado por você</p>
+                  <div className="py-24 text-center text-gray-400">
+                    <MessageSquare className="h-12 w-12 mx-auto opacity-10 mb-3" />
+                    <p className="text-sm font-medium">Nenhum aviso enviado por você recentemente</p>
                   </div>
                 )}
                 
                 {sentAvisos.map((aviso) => (
-                  <div key={aviso.id} className="p-4 rounded-2xl bg-gray-50 border border-gray-100 group relative">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                  <div key={aviso.id} className="p-5 rounded-3xl bg-white border border-gray-100 shadow-sm hover:shadow-md transition-shadow group relative">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-[10px] font-black uppercase tracking-tighter px-2.5 py-1 rounded-lg ${
                         aviso.type === 'warning' ? 'bg-amber-100 text-amber-700' : 
                         aviso.type === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
                       }`}>
                         {aviso.type}
                       </span>
-                      <span className="text-[10px] text-gray-400">
-                        {new Date(aviso.createdAt).toLocaleDateString()}
+                      <span className="text-[10px] text-gray-400 font-bold">
+                        {new Date(aviso.createdAt).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}
                       </span>
                     </div>
-                    <h4 className="font-bold text-gray-900 text-sm mb-1">{aviso.title}</h4>
-                    <p className="text-xs text-gray-600 line-clamp-2 mb-3">{aviso.message}</p>
+                    <h4 className="font-black text-gray-900 text-base mb-1 leading-tight">{aviso.title}</h4>
+                    <p className="text-xs text-gray-500 line-clamp-3 mb-4 leading-relaxed font-medium">{aviso.message}</p>
                     
-                    <div className="flex flex-col gap-2 mt-auto pt-3 border-t border-gray-200/60">
+                    <div className="flex flex-col gap-3 mt-auto pt-4 border-t border-gray-100/80">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4 text-xs font-semibold text-gray-400">
-                          <span className="flex items-center gap-1">
-                            <Eye className="h-3.5 w-3.5" /> {aviso._count?.reads || 0} visualizações
+                        <div className="flex items-center gap-4 text-xs font-bold text-gray-400">
+                          <span className="flex items-center gap-1.5">
+                            <Eye className="h-4 w-4" /> {aviso._count?.reads || 0} visualizações
                           </span>
                         </div>
                         <button 
                           onClick={() => handleDelete(aviso.id)}
-                          className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                          title="Excluir"
+                          className="text-gray-300 hover:text-red-500 transition-colors p-1"
+                          title="Excluir Permanentemente"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-5 w-5" />
                         </button>
                       </div>
 
                       {aviso.reads && aviso.reads.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
+                        <div className="flex flex-wrap gap-1.5 mt-1">
                           {aviso.reads.map((r: any, idx: number) => (
-                            <span key={idx} className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-full border border-emerald-100 flex items-center gap-1">
-                              <CheckCircle2 className="h-2 w-2" />
+                            <span key={idx} className="text-[10px] font-bold bg-emerald-50 text-emerald-600 px-2 py-1 rounded-xl border border-emerald-100 flex items-center gap-1.5 group/name">
+                              <CheckCircle2 className="h-2.5 w-2.5" />
                               {r.user.name.split(' ')[0]}
                             </span>
                           ))}
@@ -237,6 +250,16 @@ export default function AvisosPage() {
               </div>
             </CardContent>
           </Card>
+        </div>
+      </div>
+      
+      <div className="pt-20 border-t border-gray-100/50">
+        <div className="bg-gray-50/50 rounded-3xl p-8 text-center border border-gray-100/40">
+           <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mb-2">Protocolo de Comunicação Escola-Coordenação</p>
+           <p className="text-xs text-gray-400 font-medium max-w-2xl mx-auto">
+             Todas as mensagens enviadas são assinadas e registradas para fins de auditoria. 
+             O histórico é sincronizado em tempo real com os painéis dos professores.
+           </p>
         </div>
       </div>
     </div>
