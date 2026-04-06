@@ -96,9 +96,9 @@ export default function AvisosPage() {
         {/* Formulário de Envio */}
         <div className="lg:col-span-3 space-y-6">
           <Card className="border-none shadow-premium overflow-hidden">
-            <CardHeader className="bg-primary text-white">
-              <CardTitle>Novo Comunicado</CardTitle>
-              <CardDescription className="text-white/70">O aviso será disparado com som para todos os alvos.</CardDescription>
+            <CardHeader className="bg-primary text-white text-center py-8">
+              <CardTitle className="text-white text-2xl font-bold">Novo Comunicado</CardTitle>
+              <CardDescription className="text-white/90 text-sm">O aviso será disparado com som para todos os alvos.</CardDescription>
             </CardHeader>
             <CardContent className="p-6">
               <form onSubmit={handleSend} className="space-y-6">
