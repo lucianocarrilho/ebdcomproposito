@@ -92,11 +92,11 @@ export default function AvisosPage() {
         <p className="page-subtitle text-lg">Gerencie e envie mensagens instantâneas para a escola</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Formulário de Envio */}
-        <div className="lg:col-span-3 space-y-6">
+        <div className="lg:col-span-7 space-y-6">
           <Card className="border-none shadow-premium overflow-hidden">
-            <CardHeader className="bg-primary text-white text-center py-8">
+            <CardHeader className="bg-primary text-white text-center py-10">
               <CardTitle className="text-white text-2xl font-bold">Novo Comunicado</CardTitle>
               <CardDescription className="text-white/90 text-sm">O aviso será disparado com som para todos os alvos.</CardDescription>
             </CardHeader>
@@ -172,7 +172,7 @@ export default function AvisosPage() {
         </div>
 
         {/* Histórico e Métricas */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-5 space-y-6">
           <Card className="border-none shadow-premium h-full">
             <CardHeader>
               <CardTitle className="text-sm font-bold flex items-center justify-between">
