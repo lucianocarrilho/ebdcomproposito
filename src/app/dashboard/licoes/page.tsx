@@ -111,6 +111,15 @@ interface Lesson {
   status: string;
 }
 
+// Formatar data ignorando fuso horário (YYYY-MM-DD para DD/MM/YYYY)
+function formatDateSafe(dateStr: string | null) {
+  if (!dateStr) return "---";
+  // Se for ISO string completa, pegar só a parte da data
+  const bareDate = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr;
+  const [year, month, day] = bareDate.split("-");
+  return `${day}/${month}/${year}`;
+}
+
 export default function LicoesPage() {
   const { data: session } = useSession();
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -326,7 +335,7 @@ export default function LicoesPage() {
         <div className="bg-white border border-gray-200 rounded-2xl px-6 py-3 shadow-sm min-w-[220px] text-center">
           <p className="text-lg font-bold text-gray-900">{currentQuarterLabel}</p>
           <p className="text-xs text-gray-400">
-            Início: {new Date(QUARTER_STARTS[selectedQuarter] || "2026-04-05").toLocaleDateString("pt-BR")}
+            Início: {formatDateSafe(QUARTER_STARTS[selectedQuarter] || "2026-04-05")}
           </p>
         </div>
         <Button variant="ghost" size="icon" onClick={() => navigateQuarter(1)} className="rounded-full">
@@ -430,7 +439,7 @@ export default function LicoesPage() {
                     
                     <div className="flex items-center gap-1.5 text-xs text-gray-400">
                       <Calendar className="h-3 w-3 flex-shrink-0" />
-                      <span>{slot.lesson.date ? new Date(slot.lesson.date).toLocaleDateString("pt-BR") : slot.date ? new Date(slot.date).toLocaleDateString("pt-BR") : "---"}</span>
+                      <span>{formatDateSafe(slot.lesson.date || slot.date)}</span>
                     </div>
                   </CardContent>
                 </>
@@ -441,7 +450,7 @@ export default function LicoesPage() {
                     <span className="text-2xl font-black">{slot.number}</span>
                   </div>
                   <p className="text-xs text-gray-400 text-center">
-                    {slot.date ? new Date(slot.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) : `Domingo ${slot.number}`}
+                    {formatDateSafe(slot.date)}
                   </p>
                   <Button 
                     variant="outline" 
