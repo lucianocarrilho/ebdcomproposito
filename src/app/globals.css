@@ -97,6 +97,15 @@
   .animate-slide-in-left {
     animation: slideInLeft 0.3s ease-out;
   }
+
+  .animate-bounce-short {
+    animation: bounceShort 0.6s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes bounceShort {
+  from { transform: translateY(0); }
+  to { transform: translateY(-3px); }
 }
 
 @keyframes fadeIn {
