@@ -87,9 +87,9 @@ export function NotificationTray() {
             )}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-80 p-0 shadow-premium border-none rounded-2xl animate-in zoom-in-95 duration-200">
-          <div className="p-4 border-b bg-gray-50/50 rounded-t-2xl">
-            <h3 className="font-bold text-gray-900 flex items-center gap-2">
+        <DropdownMenuContent align="end" className="w-[320px] sm:w-80 p-0 shadow-2xl border border-gray-200 bg-white rounded-2xl animate-in zoom-in-95 duration-200 z-50">
+          <div className="p-4 border-b bg-gray-50/80 rounded-t-2xl">
+            <h3 className="font-bold text-gray-900 flex items-center gap-2 text-sm sm:text-base">
               <Bell className="h-4 w-4 text-primary" />
               Notificações
             </h3>
