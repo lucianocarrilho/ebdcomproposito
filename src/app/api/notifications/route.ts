@@ -37,58 +37,53 @@ export async function GET(req: Request) {
       take: 20
     });
 
-    // 2. Dynamic Birthday Check (7-day window)
-    const today = new Date();
-    const nextWeek = new Date();
-    nextWeek.setDate(today.getDate() + 7);
-
-    // We check students from current professor's class or all if admin
-    const studentsWhere = userRole === "ADMIN" || userRole === "DIRIGENTE" 
-      ? { active: true } 
-      : { active: true, classId: userClassId };
-
-    const allStudents = await prisma.student.findMany({
-      where: studentsWhere,
-      select: { id: true, name: true, birthDate: true, class: { select: { name: true } } }
-    });
-
     const birthdayNotifications: any[] = [];
-    allStudents.forEach(s => {
-      if (!s.birthDate) return;
-      
-      const bday = new Date(s.birthDate);
-      const bdayThisYear = new Date(today.getFullYear(), bday.getMonth(), bday.getDate());
-      
-      // If bday already passed this year, check next year (e.g. late Dec -> early Jan check)
-      if (bdayThisYear < today && (today.getMonth() === 11 && bday.getMonth() === 0)) {
-         bdayThisYear.setFullYear(today.getFullYear() + 1);
-      }
+    const today = new Date();
+    
+    try {
+      // We check students from current professor's class or all if admin
+      const studentsWhere = userRole === "ADMIN" || userRole === "DIRIGENTE" 
+        ? { active: true } 
+        : { active: true, classId: userClassId };
 
-      const diffDays = Math.ceil((bdayThisYear.getTime() - today.getTime()) / (1000 * 3600 * 24));
-      
-      if (diffDays >= 0 && diffDays <= 7) {
-        birthdayNotifications.push({
-          id: `bday-${s.id}`,
-          title: "🎉 Aniversariante Próximo!",
-          message: `${s.name} (${s.class?.name}) faz aniversário em ${diffDays === 0 ? 'HOJE!' : diffDays + ' dias.'}`,
-          type: "birthday",
-          createdAt: new Date(),
-          isBirthday: true
+      if (userRole === "ADMIN" || userRole === "DIRIGENTE" || userClassId) {
+        const allStudents = await prisma.student.findMany({
+          where: studentsWhere,
+          select: { id: true, name: true, birthDate: true, class: { select: { name: true } } }
+        });
+
+        allStudents.forEach(s => {
+          if (!s.birthDate) return;
+          
+          const bday = new Date(s.birthDate);
+          const bdayThisYear = new Date(today.getFullYear(), bday.getMonth(), bday.getDate());
+          
+          // If bday already passed this year, check next year
+          if (bdayThisYear < today && (today.getMonth() === 11 && bday.getMonth() === 0)) {
+             bdayThisYear.setFullYear(today.getFullYear() + 1);
+          }
+
+          const diffDays = Math.ceil((bdayThisYear.getTime() - today.getTime()) / (1000 * 3600 * 24));
+          
+          if (diffDays >= 0 && diffDays <= 7) {
+            birthdayNotifications.push({
+              id: `bday-${s.id}`,
+              title: "🎉 Aniversariante Próximo!",
+              message: `${s.name} (${s.class?.name}) faz aniversário em ${diffDays === 0 ? 'HOJE!' : diffDays + ' dias.'}`,
+              type: "birthday",
+              createdAt: new Date(),
+              isBirthday: true
+            });
+          }
         });
       }
-    });
+    } catch (bdayError) {
+      console.error("Erro ao processar aniversariantes:", bdayError);
+      // We continue with empty birthdays but keep coordination notices
+    }
 
     // Combine and format
     const finalNotifications = [
-       {
-         id: "system-notice",
-         title: "✨ Central de Alertas Online",
-         message: `Sistema ativo em ${new Date().toLocaleTimeString()}. Amara, se você lê isto, o sistema está OK!`,
-         type: "success",
-         createdAt: new Date(),
-         isRead: false,
-         senderName: "Secretaria EBD"
-       },
        ...birthdayNotifications,
        ...dbNotifications.map(n => ({
           id: n.id,
@@ -97,7 +92,7 @@ export async function GET(req: Request) {
           type: n.type,
           createdAt: n.createdAt,
           isRead: n.reads.length > 0,
-          senderName: (n as any).sender?.name || "Administração"
+          senderName: (n as any).sender?.name || "Coordenação"
        }))
     ];
 
