@@ -133,7 +133,8 @@ export default function LicoesPage() {
   
   // Filtros
   const [selectedQuarter, setSelectedQuarter] = useState(getCurrentQuarter());
-  const [selectedCategory, setSelectedCategory] = useState("Adultos");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [classesLoaded, setClassesLoaded] = useState(false);
   
   // Dialog
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -160,12 +161,11 @@ export default function LicoesPage() {
           // Se não houver categoria selecionada ou a atual não existir mais, selecionar a primeira
           if (activeClasses.length > 0) {
             const exists = activeClasses.some((c: any) => c.name === selectedCategory);
-            if (!exists && selectedCategory !== "Adultos") {
-              setSelectedCategory(activeClasses[0].name);
-            } else if (selectedCategory === "Adultos" && !activeClasses.some((c: any) => c.name === "Adultos")) {
+            if (!exists) {
               setSelectedCategory(activeClasses[0].name);
             }
           }
+          setClassesLoaded(true);
         }
       } catch (err) {
         console.error("Erro ao buscar classes do usuário:", err);
@@ -175,6 +175,7 @@ export default function LicoesPage() {
   }, [session, selectedCategory]);
 
   const fetchLessons = useCallback(async () => {
+    if (!classesLoaded || !selectedCategory) return;
     setLoading(true);
     try {
       const res = await fetch(`/api/lessons?quarter=${selectedQuarter}&category=${selectedCategory}`, {
@@ -190,7 +191,7 @@ export default function LicoesPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedQuarter, selectedCategory]);
+  }, [selectedQuarter, selectedCategory, classesLoaded]);
 
   useEffect(() => {
     fetchLessons();
@@ -384,10 +385,10 @@ export default function LicoesPage() {
       </div>
 
       {/* Grid de 13 Lições */}
-      {loading ? (
+      {(!classesLoaded || loading) ? (
         <div className="h-[40vh] flex flex-col items-center justify-center gap-4 text-gray-400">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p>Carregando lições...</p>
+          <p>Carregando lições e classes...</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
