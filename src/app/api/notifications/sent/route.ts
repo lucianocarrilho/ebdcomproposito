@@ -14,6 +14,13 @@ export async function GET() {
         senderId: userId
       },
       include: {
+        reads: {
+          include: {
+            user: {
+              select: { name: true }
+            }
+          }
+        },
         _count: {
           select: { reads: true }
         }

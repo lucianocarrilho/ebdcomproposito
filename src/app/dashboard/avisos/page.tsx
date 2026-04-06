@@ -205,19 +205,32 @@ export default function AvisosPage() {
                     <h4 className="font-bold text-gray-900 text-sm mb-1">{aviso.title}</h4>
                     <p className="text-xs text-gray-600 line-clamp-2 mb-3">{aviso.message}</p>
                     
-                    <div className="flex items-center justify-between mt-auto pt-3 border-t border-gray-200/60">
-                      <div className="flex items-center gap-4 text-xs font-medium text-gray-500">
-                        <span className="flex items-center gap-1">
-                          <Eye className="h-3 w-3" /> {aviso._count?.reads || 0} leituras
-                        </span>
+                    <div className="flex flex-col gap-2 mt-auto pt-3 border-t border-gray-200/60">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4 text-xs font-semibold text-gray-400">
+                          <span className="flex items-center gap-1">
+                            <Eye className="h-3.5 w-3.5" /> {aviso._count?.reads || 0} visualizações
+                          </span>
+                        </div>
+                        <button 
+                          onClick={() => handleDelete(aviso.id)}
+                          className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                          title="Excluir"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
-                      <button 
-                        onClick={() => handleDelete(aviso.id)}
-                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                        title="Excluir"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+
+                      {aviso.reads && aviso.reads.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {aviso.reads.map((r: any, idx: number) => (
+                            <span key={idx} className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-full border border-emerald-100 flex items-center gap-1">
+                              <CheckCircle2 className="h-2 w-2" />
+                              {r.user.name.split(' ')[0]}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
