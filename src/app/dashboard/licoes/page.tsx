@@ -181,15 +181,8 @@ export default function LicoesPage() {
   const fetchLessons = useCallback(async () => {
     if (!classesLoaded || !selectedCategory) return;
     setLoading(true);
-    
-    // Mapeamento para busca: Se buscar Homens/Mulheres, buscar na verdade a revista "Adultos"
-    let fetchCat = selectedCategory;
-    if (["Homens", "Mulheres"].includes(selectedCategory)) {
-      fetchCat = "Adultos";
-    }
-
     try {
-      const res = await fetch(`/api/lessons?quarter=${selectedQuarter}&category=${fetchCat}`, {
+      const res = await fetch(`/api/lessons?quarter=${selectedQuarter}&category=${selectedCategory}`, {
         cache: "no-store",
         headers: { "Cache-Control": "no-cache" }
       });
@@ -232,17 +225,11 @@ export default function LicoesPage() {
       const lessonNumber = Number(fd.get("number"));
       const dateValue = fd.get("date") as string;
       
-      // Mapeamento Inteligente: Se for classe Homens ou Mulheres, salvar como "Adultos"
-      let saveCategory = selectedCategory;
-      if (["Homens", "Mulheres"].includes(selectedCategory)) {
-        saveCategory = "Adultos";
-      }
-
       const payload = {
         number: lessonNumber,
         title: fd.get("title"),
         quarter: selectedQuarter,
-        category: saveCategory,
+        category: selectedCategory,
         date: dateValue || null,
         bibleText: fd.get("bibleText"),
         summary: fd.get("summary"),
