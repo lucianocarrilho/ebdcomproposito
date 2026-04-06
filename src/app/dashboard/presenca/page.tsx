@@ -157,15 +157,15 @@ export default function PresencaPage() {
           <h1 className="page-title text-2xl">Chamada de Presença</h1>
           <p className="page-subtitle">Registre a presença dos alunos na EBD</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <Input
             type="date"
             value={selectedDate}
             onChange={e => setSelectedDate(e.target.value)}
-            className="w-40 shadow-sm"
+            className="w-full sm:w-40 h-11 sm:h-10 shadow-sm rounded-xl sm:rounded-md"
           />
           <Select value={selectedClass} onValueChange={setSelectedClass}>
-            <SelectTrigger className="w-48 shadow-sm">
+            <SelectTrigger className="w-full sm:w-48 h-11 sm:h-10 shadow-sm rounded-xl sm:rounded-md">
               <SelectValue placeholder="Selecione a classe" />
             </SelectTrigger>
             <SelectContent>
@@ -197,8 +197,13 @@ export default function PresencaPage() {
         </div>
       </div>
 
-      <div className="flex justify-end">
-        <Button variant="outline" onClick={markAllPresent} disabled={loadingStudents || total === 0} className="rounded-full shadow-sm">
+      <div className="flex justify-end w-full">
+        <Button 
+          variant="outline" 
+          onClick={markAllPresent} 
+          disabled={loadingStudents || total === 0} 
+          className="w-full sm:w-auto h-12 sm:h-10 rounded-xl sm:rounded-full shadow-sm text-sm font-bold sm:font-normal"
+        >
           <CheckCheck className="h-4 w-4 mr-2 text-emerald-500" />
           Marcar Todos Presentes
         </Button>

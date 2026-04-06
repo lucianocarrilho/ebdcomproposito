@@ -262,27 +262,28 @@ export default function ClassesPage() {
                   <p className="font-semibold text-gray-700">{cls.dirigente || "-"}</p>
                 </div>
               </div>
-              <div className="flex gap-2 pt-2 border-t border-gray-50">
+              <div className="flex gap-2 pt-2 border-t border-gray-100 mt-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="flex-1"
+                  className="flex-1 h-11 sm:h-9 rounded-xl sm:rounded-md font-bold sm:font-normal"
                   onClick={() => {
                     setEditingClass(cls);
                     setIsDialogOpen(true);
                   }}
                 >
-                  <Edit className="h-3.5 w-3.5 mr-1" />
+                  <Edit className="h-4 w-4 mr-1.5" />
                   Editar
                 </Button>
                 {((session?.user as any)?.role !== "APOIO") && (
                   <Button
                     variant="destructive"
                     size="sm"
+                    className="w-11 sm:w-auto h-11 sm:h-9 rounded-xl sm:rounded-md flex items-center justify-center p-0 sm:px-3"
                     title="Excluir classe"
                     onClick={() => setDeleteConfirm(cls.id)}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 )}
               </div>

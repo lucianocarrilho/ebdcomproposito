@@ -6,7 +6,7 @@ import {
   Plus, Edit, Search, BookOpen, Trash2, 
   Calendar, Loader2, Image as ImageIcon,
   ChevronLeft, ChevronRight, BookMarked,
-  CheckCircle, Clock, AlertCircle
+  CheckCircle, Clock, AlertCircle, ChevronDown
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -363,8 +363,28 @@ export default function LicoesPage() {
         </Button>
       </div>
 
-      {/* Abas de Categoria (Revista) */}
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      {/* Seletor de Categoria (Tabs no Desktop, Select no Mobile) */}
+      <div className="block md:hidden">
+        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2 block ml-1">
+          Selecionar Classe
+        </label>
+        <div className="relative">
+          <select 
+            className="w-full h-14 bg-white border-2 border-gray-100 rounded-2xl px-5 shadow-sm focus:ring-2 focus:ring-primary focus:border-primary outline-none appearance-none font-bold text-gray-700"
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+          >
+            {categories.map(cat => (
+              <option key={cat.id} value={cat.id}>{cat.icon} {cat.label}</option>
+            ))}
+          </select>
+          <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+            <ChevronDown className="h-5 w-5" />
+          </div>
+        </div>
+      </div>
+
+      <div className="hidden md:flex gap-2 overflow-x-auto pb-1">
         {categories.map(cat => (
           <button
             key={cat.id}
@@ -377,7 +397,7 @@ export default function LicoesPage() {
             )}
           >
             <span className="text-lg">{cat.icon}</span>
-            <div className="text-left">
+            <div className="text-left font-semibold">
               <p>{cat.label}</p>
               <p className={cn(
                 "text-[10px] font-normal",

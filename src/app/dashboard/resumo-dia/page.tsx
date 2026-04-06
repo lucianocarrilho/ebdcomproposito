@@ -137,20 +137,20 @@ export default function ResumoDiaPage() {
           <p className="page-subtitle">Fechamento do dia e levantamento de estatísticas</p>
         </div>
         
-        <div className="flex items-center gap-2">
-          <div className="bg-white p-2 rounded-xl border flex items-center gap-2 shadow-sm">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="bg-white p-2 rounded-xl border flex items-center gap-2 shadow-sm flex-1 sm:flex-initial">
             <Calendar className="h-4 w-4 text-gray-400" />
             <Input 
               type="date" 
-              className="border-none bg-transparent font-bold h-8 focus-visible:ring-0 w-36" 
+              className="border-none bg-transparent font-bold h-8 focus-visible:ring-0 w-full sm:w-36 text-sm" 
               value={date}
               onChange={e => setDate(e.target.value)}
             />
           </div>
-          <Button variant="outline" size="icon" className="rounded-xl shadow-sm" onClick={handlePrint}>
+          <Button variant="outline" size="icon" className="h-12 w-12 sm:h-10 sm:w-10 rounded-xl shadow-sm bg-white" onClick={handlePrint}>
             <Printer className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="icon" className="rounded-xl shadow-sm" onClick={exportPDF}>
+          <Button variant="outline" size="icon" className="h-12 w-12 sm:h-10 sm:w-10 rounded-xl shadow-sm bg-white" onClick={exportPDF}>
             <Download className="h-4 w-4" />
           </Button>
         </div>
@@ -232,44 +232,46 @@ export default function ResumoDiaPage() {
               <CardDescription>Dados individuais para preenchimento manual</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-50/30">
-                    <TableHead className="font-bold pl-6">Classe</TableHead>
-                    <TableHead className="font-bold text-center">Matriculados</TableHead>
-                    <TableHead className="font-bold text-center text-emerald-600 bg-emerald-50/30">P</TableHead>
-                    <TableHead className="font-bold text-center text-red-600 bg-red-50/30">F</TableHead>
-                    <TableHead className="font-bold text-center text-amber-600 bg-amber-50/30">J</TableHead>
-                    <TableHead className="font-bold text-center text-primary bg-primary/5">Vis.</TableHead>
-                    <TableHead className="font-bold text-center pr-6">Freq%</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.classes.map(c => (
-                    <TableRow key={c.id} className="hover:bg-gray-50/30 transition-colors">
-                      <TableCell className="font-bold text-gray-900 pl-6 py-4">{c.className}</TableCell>
-                      <TableCell className="text-center font-medium text-gray-500">{c.enrolled}</TableCell>
-                      <TableCell className="text-center font-extrabold text-emerald-700 bg-emerald-50/10 underline decoration-emerald-200 underline-offset-4">{c.present}</TableCell>
-                      <TableCell className="text-center font-extrabold text-red-700 bg-red-50/10 underline decoration-red-200 underline-offset-4">{c.absent}</TableCell>
-                      <TableCell className="text-center font-extrabold text-amber-700 bg-amber-50/10 underline decoration-amber-200 underline-offset-4">{c.justified}</TableCell>
-                      <TableCell className="text-center font-extrabold text-primary bg-primary/5 underline decoration-primary/20 underline-offset-4">{c.visitors}</TableCell>
-                      <TableCell className="text-center font-bold text-gray-700 pr-6">
-                        <Badge variant="secondary" className="font-extrabold">{c.freq}%</Badge>
-                      </TableCell>
+              <div className="overflow-x-auto scrollbar-hide">
+                <Table className="min-w-[700px] sm:min-w-full">
+                  <TableHeader>
+                    <TableRow className="bg-gray-50/30">
+                      <TableHead className="font-bold pl-6">Classe</TableHead>
+                      <TableHead className="font-bold text-center">Matriculados</TableHead>
+                      <TableHead className="font-bold text-center text-emerald-600 bg-emerald-50/30">P</TableHead>
+                      <TableHead className="font-bold text-center text-red-600 bg-red-50/30">F</TableHead>
+                      <TableHead className="font-bold text-center text-amber-600 bg-amber-50/30">J</TableHead>
+                      <TableHead className="font-bold text-center text-primary bg-primary/5">Vis.</TableHead>
+                      <TableHead className="font-bold text-center pr-6">Freq%</TableHead>
                     </TableRow>
-                  ))}
-                  {/* Linha de Totais da Tabela */}
-                  <TableRow className="bg-gray-900 text-white font-bold hover:bg-gray-900">
-                    <TableCell className="pl-6 py-4">TOTAIS GERAIS</TableCell>
-                    <TableCell className="text-center">{data.summary.totalEnrolled}</TableCell>
-                    <TableCell className="text-center text-emerald-400">{data.summary.totalPresent}</TableCell>
-                    <TableCell className="text-center text-red-400">{data.summary.totalAbsent}</TableCell>
-                    <TableCell className="text-center text-amber-400">{data.summary.totalJustified}</TableCell>
-                    <TableCell className="text-center text-blue-300">{data.summary.totalVisitors}</TableCell>
-                    <TableCell className="text-center pr-6">{data.summary.schoolFreq}%</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {data.classes.map(c => (
+                      <TableRow key={c.id} className="hover:bg-gray-50/30 transition-colors">
+                        <TableCell className="font-bold text-gray-900 pl-6 py-4">{c.className}</TableCell>
+                        <TableCell className="text-center font-medium text-gray-500">{c.enrolled}</TableCell>
+                        <TableCell className="text-center font-extrabold text-emerald-700 bg-emerald-50/10 underline decoration-emerald-200 underline-offset-4">{c.present}</TableCell>
+                        <TableCell className="text-center font-extrabold text-red-700 bg-red-50/10 underline decoration-red-200 underline-offset-4">{c.absent}</TableCell>
+                        <TableCell className="text-center font-extrabold text-amber-700 bg-amber-50/10 underline decoration-amber-200 underline-offset-4">{c.justified}</TableCell>
+                        <TableCell className="text-center font-extrabold text-primary bg-primary/5 underline decoration-primary/20 underline-offset-4">{c.visitors}</TableCell>
+                        <TableCell className="text-center font-bold text-gray-700 pr-6">
+                          <Badge variant="secondary" className="font-extrabold">{c.freq}%</Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {/* Linha de Totais da Tabela */}
+                    <TableRow className="bg-gray-900 text-white font-bold hover:bg-gray-900">
+                      <TableCell className="pl-6 py-4">TOTAIS GERAIS</TableCell>
+                      <TableCell className="text-center">{data.summary.totalEnrolled}</TableCell>
+                      <TableCell className="text-center text-emerald-400">{data.summary.totalPresent}</TableCell>
+                      <TableCell className="text-center text-red-400">{data.summary.totalAbsent}</TableCell>
+                      <TableCell className="text-center text-amber-400">{data.summary.totalJustified}</TableCell>
+                      <TableCell className="text-center text-blue-300">{data.summary.totalVisitors}</TableCell>
+                      <TableCell className="text-center pr-6">{data.summary.schoolFreq}%</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
           
