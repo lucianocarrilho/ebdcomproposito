@@ -34,11 +34,10 @@ export async function GET(request: NextRequest) {
         select: { name: true }
       });
       
-      const allowedCategories = ["Adultos", "Jovens", "Adolescentes", "Crianças"].filter(cat => 
-        teacherClasses.some(cls => cls.name.toLowerCase().includes(cat.toLowerCase().substring(0, 5)))
-      );
+      const allowedCategories = teacherClasses.map(cls => cls.name);
 
       if (category) {
+        // Permitir a categoria se ela bater com o nome da classe do professor
         if (!allowedCategories.includes(category)) {
           return NextResponse.json([]); // Return empty if category not allowed
         }
