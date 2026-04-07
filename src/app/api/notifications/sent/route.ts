@@ -12,15 +12,15 @@ export async function GET() {
     const userId = (session.user as any).id;
     const userRole = (session.user as any).role;
 
-    // 1. Fetch notifications
+    // 1. Fetch notifications (completely separate call)
     const notifications = await prisma.notification.findMany({
       orderBy: { createdAt: "desc" },
       take: 50
     });
 
-    if (notifications.length === 0) return NextResponse.json([]);
+    if (!notifications || notifications.length === 0) return NextResponse.json([]);
 
-    // 2. Fetch all reads for these notifications (Basic fields only, to avoid missing 'user' relation)
+    // 2. Fetch all reads for these notifications
     const notificationIds = notifications.map(n => n.id);
     const allReads = await prisma.notificationRead.findMany({
       where: {
@@ -28,14 +28,14 @@ export async function GET() {
       }
     });
 
-    // 3. Fetch all users involved in these reads separately
+    // 3. Fetch users involved
     const userIds = Array.from(new Set(allReads.map(r => r.userId)));
     const allUsers = await prisma.user.findMany({
       where: { id: { in: userIds } },
       select: { id: true, name: true }
     });
 
-    // 4. Manual triple join in memory
+    // 4. Assemble the final data manual to avoid Prisma "Unknown field" errors on joins
     const formatted = notifications.map(notif => {
       const readsForNotif = allReads.filter(r => r.notificationId === notif.id);
       
@@ -57,8 +57,8 @@ export async function GET() {
   } catch (error: any) {
     console.error("Erro ao buscar avisos enviados:", error);
     return NextResponse.json({ 
-      error: "Erro interno", 
-      details: error.message || "Sem detalhes" 
+      error: "Erro interno v3-manual", 
+      details: error.message || "Sem detalhes extras" 
     }, { status: 500 });
   }
 }
@@ -78,8 +78,8 @@ export async function DELETE(req: Request) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erro ao excluir aviso:", error);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    return NextResponse.json({ error: "Erro interno de exclusão" }, { status: 500 });
   }
 }
