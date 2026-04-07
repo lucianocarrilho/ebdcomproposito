@@ -13,14 +13,9 @@ export async function GET() {
     const userRole = (session.user as any).role;
 
     const notifications = await prisma.notification.findMany({
-      where: {
+      where: userRole === "ADMIN" ? {} : {
         active: true,
-        // If Admin, show everything sent by team (senderId is not null)
-        // Otherwise show only what I sent
-        ...(userRole === "ADMIN" 
-          ? { senderId: { not: null } }
-          : { senderId: userId }
-        )
+        senderId: userId
       },
       include: {
         reads: {
