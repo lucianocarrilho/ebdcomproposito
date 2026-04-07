@@ -12,12 +12,8 @@ export async function GET() {
     const userId = (session.user as any).id;
     const userRole = (session.user as any).role;
 
-    // 1. Fetch notifications first (this works!)
+    // Absolute diagnostic: Fetch everything with NO filters
     const notifications = await prisma.notification.findMany({
-      where: userRole === "ADMIN" ? {} : {
-        active: true,
-        senderId: userId
-      },
       orderBy: { createdAt: "desc" },
       take: 50
     });
