@@ -12,7 +12,7 @@ export async function GET() {
     const userId = (session.user as any).id;
     const userRole = (session.user as any).role;
 
-    // Absolute diagnostic: Fetch everything with NO filters
+    // 1. Fetch notifications
     const notifications = await prisma.notification.findMany({
       orderBy: { createdAt: "desc" },
       take: 50
@@ -20,30 +20,38 @@ export async function GET() {
 
     if (notifications.length === 0) return NextResponse.json([]);
 
-    // 2. Fetch reads separately for these notifications (safer join)
+    // 2. Fetch all reads for these notifications (Basic fields only, to avoid missing 'user' relation)
     const notificationIds = notifications.map(n => n.id);
     const allReads = await prisma.notificationRead.findMany({
       where: {
         notificationId: { in: notificationIds }
-      },
-      include: {
-        user: {
-          select: { name: true }
-        }
       }
     });
 
-    // 3. Manual join in memory
-    const formatted = notifications.map(notif => ({
-      ...notif,
-      _count: {
-        reads: allReads.filter(r => r.notificationId === notif.id).length
-      },
-      reads: allReads
-        .filter(r => r.notificationId === notif.id)
-        .map(r => ({ user: { name: r.user.name } }))
-        .slice(0, 50)
-    }));
+    // 3. Fetch all users involved in these reads separately
+    const userIds = Array.from(new Set(allReads.map(r => r.userId)));
+    const allUsers = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, name: true }
+    });
+
+    // 4. Manual triple join in memory
+    const formatted = notifications.map(notif => {
+      const readsForNotif = allReads.filter(r => r.notificationId === notif.id);
+      
+      return {
+        ...notif,
+        _count: {
+          reads: readsForNotif.length
+        },
+        reads: readsForNotif.map(r => {
+          const user = allUsers.find(u => u.id === r.userId);
+          return {
+            user: { name: user?.name || "Usuário" }
+          };
+        }).slice(0, 50)
+      };
+    });
 
     return NextResponse.json(formatted);
   } catch (error: any) {
