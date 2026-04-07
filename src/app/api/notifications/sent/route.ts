@@ -10,17 +10,17 @@ export async function GET() {
     if (!session || !session.user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
     const userId = (session.user as any).id;
-    const userEmail = session.user.email;
-    const userName = session.user.name;
+    const userRole = (session.user as any).role;
 
     const notifications = await prisma.notification.findMany({
       where: {
         active: true,
-        OR: [
-          { senderId: userId },
-          { sender: { email: userEmail } },
-          { sender: { name: userName } }
-        ]
+        // If Admin, show everything sent by team (senderId is not null)
+        // Otherwise show only what I sent
+        ...(userRole === "ADMIN" 
+          ? { senderId: { not: null } }
+          : { senderId: userId }
+        )
       },
       include: {
         reads: {
