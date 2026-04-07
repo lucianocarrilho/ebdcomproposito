@@ -17,18 +17,6 @@ export async function GET() {
         active: true,
         senderId: userId
       },
-      include: {
-        reads: {
-          include: {
-            user: {
-              select: { name: true }
-            }
-          }
-        },
-        _count: {
-          select: { reads: true }
-        }
-      },
       orderBy: { createdAt: "desc" },
       take: 50
     });
