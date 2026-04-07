@@ -12,29 +12,44 @@ export async function GET() {
     const userId = (session.user as any).id;
     const userRole = (session.user as any).role;
 
+    // 1. Fetch notifications first (this works!)
     const notifications = await prisma.notification.findMany({
       where: userRole === "ADMIN" ? {} : {
         active: true,
         senderId: userId
       },
-      include: {
-        reads: {
-          take: 50,
-          select: {
-            user: {
-              select: { name: true }
-            }
-          }
-        },
-        _count: {
-          select: { reads: true }
-        }
-      },
       orderBy: { createdAt: "desc" },
       take: 50
     });
 
-    return NextResponse.json(notifications);
+    if (notifications.length === 0) return NextResponse.json([]);
+
+    // 2. Fetch reads separately for these notifications (safer join)
+    const notificationIds = notifications.map(n => n.id);
+    const allReads = await prisma.notificationRead.findMany({
+      where: {
+        notificationId: { in: notificationIds }
+      },
+      include: {
+        user: {
+          select: { name: true }
+        }
+      }
+    });
+
+    // 3. Manual join in memory
+    const formatted = notifications.map(notif => ({
+      ...notif,
+      _count: {
+        reads: allReads.filter(r => r.notificationId === notif.id).length
+      },
+      reads: allReads
+        .filter(r => r.notificationId === notif.id)
+        .map(r => ({ user: { name: r.user.name } }))
+        .slice(0, 50)
+    }));
+
+    return NextResponse.json(formatted);
   } catch (error: any) {
     console.error("Erro ao buscar avisos enviados:", error);
     return NextResponse.json({ 
