@@ -34,9 +34,12 @@ export async function GET() {
     });
 
     return NextResponse.json(notifications);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erro ao buscar avisos enviados:", error);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    return NextResponse.json({ 
+      error: "Erro interno", 
+      details: error.message || "Sem detalhes" 
+    }, { status: 500 });
   }
 }
 
