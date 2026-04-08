@@ -122,3 +122,62 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function PUT(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session || (session.user as any).role !== "ADMIN") {
+      return NextResponse.json({ error: "Somente administradores podem editar eventos" }, { status: 403 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ error: "ID é obrigatório" }, { status: 400 });
+    }
+
+    const body = await request.json();
+    const { title, date, type, description } = body;
+
+    const event = await prisma.event.update({
+      where: { id },
+      data: {
+        title,
+        date: new Date(date),
+        type,
+        description,
+      },
+    });
+
+    return NextResponse.json(event);
+  } catch (error) {
+    console.error("Error updating event:", error);
+    return NextResponse.json({ error: "Erro ao atualizar evento" }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session || (session.user as any).role !== "ADMIN") {
+      return NextResponse.json({ error: "Somente administradores podem excluir eventos" }, { status: 403 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ error: "ID é obrigatório" }, { status: 400 });
+    }
+
+    await prisma.event.delete({
+      where: { id },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting event:", error);
+    return NextResponse.json({ error: "Erro ao excluir evento" }, { status: 500 });
+  }
+}
+

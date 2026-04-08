@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, BookOpen, Cake, Star, Loader2, Info } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, BookOpen, Cake, Star, Loader2, Info, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -35,7 +35,12 @@ export default function CalendarioPage() {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<any | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!isDialogOpen) setSelectedEvent(null);
+  }, [isDialogOpen]);
 
   useEffect(() => {
     fetchEvents();
@@ -67,20 +72,46 @@ export default function CalendarioPage() {
     };
 
     try {
-      const res = await fetch("/api/events", {
-        method: "POST",
+      const url = selectedEvent ? `/api/events?id=${selectedEvent.id}` : "/api/events";
+      const method = selectedEvent ? "PUT" : "POST";
+      
+      const res = await fetch(url, {
+        method,
         body: JSON.stringify(payload),
       });
 
       if (res.ok) {
-        toast.success("Evento agendado!");
+        toast.success(selectedEvent ? "Evento atualizado!" : "Evento agendado!");
         setIsDialogOpen(false);
         fetchEvents();
       } else {
         throw new Error();
       }
     } catch (err) {
-      toast.error("Erro ao agendar evento");
+      toast.error("Erro ao salvar evento");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedEvent || !confirm("Deseja realmente excluir este evento?")) return;
+    
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/events?id=${selectedEvent.id}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        toast.success("Evento excluído!");
+        setIsDialogOpen(false);
+        fetchEvents();
+      } else {
+        throw new Error();
+      }
+    } catch (err) {
+      toast.error("Erro ao excluir evento");
     } finally {
       setSubmitting(false);
     }
@@ -173,7 +204,14 @@ export default function CalendarioPage() {
                           {dayEvents.slice(0, 2).map((e, idx) => (
                             <div
                               key={e.id}
-                              className={`text-[8px] md:text-[9px] text-white font-bold rounded-md px-1.5 py-0.5 md:py-1 truncate shadow-sm ${typeConfig[e.type]?.color || "bg-gray-400"}`}
+                              onClick={(event) => {
+                                if ((session?.user as any)?.role === "ADMIN") {
+                                  event.stopPropagation();
+                                  setSelectedEvent(e);
+                                  setIsDialogOpen(true);
+                                }
+                              }}
+                              className={`text-[8px] md:text-[9px] text-white font-bold rounded-md px-1.5 py-0.5 md:py-1 truncate shadow-sm cursor-pointer hover:brightness-110 active:scale-95 transition-all ${typeConfig[e.type]?.color || "bg-gray-400"}`}
                               title={e.title}
                             >
                               {e.title}
@@ -215,7 +253,16 @@ export default function CalendarioPage() {
                     const config = typeConfig[e.type];
                     const Icon = config?.icon || Star;
                     return (
-                      <div key={e.id} className="group flex items-start gap-4 p-3 rounded-2xl bg-gray-50 border border-transparent hover:bg-white hover:border-gray-100 hover:shadow-md transition-all duration-300">
+                      <div 
+                        key={e.id} 
+                        onClick={() => {
+                          if ((session?.user as any)?.role === "ADMIN") {
+                            setSelectedEvent(e);
+                            setIsDialogOpen(true);
+                          }
+                        }}
+                        className="group flex items-start gap-4 p-3 rounded-2xl bg-gray-50 border border-transparent hover:bg-white hover:border-gray-100 hover:shadow-md transition-all duration-300 cursor-pointer"
+                      >
                         <div className={`w-10 h-10 ${config?.color || "bg-gray-400"} rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm transform group-hover:scale-110 transition-transform`}>
                           <Icon className="h-5 w-5 text-white" />
                         </div>
@@ -258,17 +305,17 @@ export default function CalendarioPage() {
           <form onSubmit={handleSave} className="space-y-5 pt-4">
             <div className="space-y-2">
               <Label htmlFor="title" className="font-bold">Título do Evento</Label>
-              <Input id="title" name="title" required className="h-11 rounded-lg" placeholder="Ex: Reunião de Professores" />
+              <Input id="title" name="title" defaultValue={selectedEvent?.title} required className="h-11 rounded-lg" placeholder="Ex: Reunião de Professores" />
             </div>
             
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="date" className="font-bold">Data</Label>
-                <Input id="date" name="date" type="date" required className="h-11 rounded-lg" />
+                <Input id="date" name="date" type="date" defaultValue={selectedEvent?.date ? new Date(selectedEvent.date).toISOString().split('T')[0] : ""} required className="h-11 rounded-lg" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="type" className="font-bold">Tipo</Label>
-                <Select name="type" defaultValue="evento">
+                <Select name="type" defaultValue={selectedEvent?.type || "evento"}>
                   <SelectTrigger className="h-11 rounded-lg">
                     <SelectValue />
                   </SelectTrigger>
@@ -285,14 +332,23 @@ export default function CalendarioPage() {
 
             <div className="space-y-2">
               <Label htmlFor="description" className="font-bold">Descrição (Opcional)</Label>
-              <Input id="description" name="description" className="h-11 rounded-lg" placeholder="Mais detalhes..." />
+              <Input id="description" name="description" defaultValue={selectedEvent?.description} className="h-11 rounded-lg" placeholder="Mais detalhes..." />
             </div>
 
-            <DialogFooter className="gap-2 sm:gap-0">
-               <Button type="button" variant="ghost" onClick={() => setIsDialogOpen(false)} disabled={submitting}>Cancelar</Button>
-               <Button type="submit" disabled={submitting} className="premium-button min-w-[120px]">
-                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Agendar"}
-               </Button>
+            <DialogFooter className="gap-2 sm:gap-0 pt-4 border-t border-gray-100 items-center justify-between">
+               <div>
+                {selectedEvent && (
+                  <Button type="button" variant="ghost" onClick={handleDelete} disabled={submitting} className="text-red-500 hover:text-red-600 hover:bg-red-50">
+                    <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                  </Button>
+                )}
+               </div>
+               <div className="flex gap-2">
+                 <Button type="button" variant="ghost" onClick={() => setIsDialogOpen(false)} disabled={submitting}>Cancelar</Button>
+                 <Button type="submit" disabled={submitting} className="premium-button min-w-[120px]">
+                   {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : (selectedEvent ? "Salvar" : "Agendar")}
+                 </Button>
+               </div>
             </DialogFooter>
           </form>
         </DialogContent>
