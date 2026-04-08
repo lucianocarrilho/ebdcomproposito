@@ -184,6 +184,22 @@ export async function GET() {
     const destaque = highlights.find((h) => h.type === "destaque");
     const missionario = highlights.find((h) => h.type === "missionario");
 
+    // Fetch Avisos from Calendar (Events of type 'aviso')
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
+
+    const avisosCalendario = await prisma.event.findMany({
+      where: {
+        date: {
+          gte: startOfMonth,
+          lte: endOfMonth,
+        },
+        type: "aviso",
+      },
+      orderBy: { date: "asc" },
+      take: 5,
+    });
+
     return NextResponse.json({
       stats: {
         totalStudents,
@@ -196,6 +212,12 @@ export async function GET() {
         aniversariantes: aniversariantesDoMes.length,
       },
       aniversariantesDoMes: aniversariantesDoMes.slice(0, 5),
+      avisosCalendario: avisosCalendario.map(a => ({
+        id: a.id,
+        title: a.title,
+        date: a.date,
+        description: a.description,
+      })),
       attendanceByClass,
       weeklyData,
       pizzaData: [

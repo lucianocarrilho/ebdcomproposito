@@ -25,6 +25,7 @@ const typeConfig: Record<string, { color: string; icon: React.ElementType; label
   comemorativo: { color: "bg-pink-500", icon: Star, label: "Festa" },
   aniversario: { color: "bg-amber-500", icon: Cake, label: "Aniversário" },
   trimestre: { color: "bg-purple-500", icon: CalendarIcon, label: "Trimestre" },
+  aviso: { color: "bg-indigo-500", icon: Info, label: "Aviso" },
 };
 
 export default function CalendarioPage() {
@@ -276,6 +277,7 @@ export default function CalendarioPage() {
                     <SelectItem value="evento">⭐ Evento Geral</SelectItem>
                     <SelectItem value="comemorativo">🎉 Festa/Comemorativo</SelectItem>
                     <SelectItem value="trimestre">📅 Trimestre</SelectItem>
+                    <SelectItem value="aviso">📢 Aviso/Comunicado</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
