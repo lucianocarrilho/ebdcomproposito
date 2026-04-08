@@ -167,10 +167,6 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
-{/* Agenda do Mês */}
-<div className="lg:col-span-3">
-  <CalendarioPage />
-</div>
 
       {/* Destaque e Missionário */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -305,51 +301,11 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Avisos Agendados */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Bell className="h-5 w-5 text-indigo-500" />
-              Avisos da Agenda
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {data.avisosCalendario?.length > 0 ? (
-                data.avisosCalendario.map((aviso) => (
-                  <div
-                    key={aviso.id}
-                    className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-all hover:scale-[1.01]"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center flex-shrink-0">
-                        <Bell className="h-5 w-5 text-indigo-500" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-gray-900">{aviso.title}</p>
-                        <p className="text-xs text-gray-500 line-clamp-1">{aviso.description || "Sem descrição"}</p>
-                      </div>
-                    </div>
-                    <Badge variant="secondary" className="bg-white text-indigo-600 border-indigo-100 whitespace-nowrap">
-                      {new Date(aviso.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
-                    </Badge>
-                  </div>
-                ))
-              ) : (
-                <div className="flex flex-col items-center justify-center p-8 text-gray-400">
-                  <Bell className="h-8 w-8 mb-2 opacity-20" />
-                  <p className="text-sm italic">Nenhum aviso agendado</p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
         {/* Line Chart - Evolução */}
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-primary" />
@@ -388,6 +344,48 @@ export default function DashboardPage() {
                   />
                 </LineChart>
               </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Avisos Agendados */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5 text-indigo-500" />
+              Avisos da Agenda
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {data.avisosCalendario?.length > 0 ? (
+                data.avisosCalendario.map((aviso) => (
+                  <div
+                    key={aviso.id}
+                    className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-all hover:scale-[1.01]"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                        <Bell className="h-5 w-5 text-indigo-500" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-gray-900">{aviso.title}</p>
+                        <p className="text-xs text-gray-500 line-clamp-1">{aviso.description || "Sem descrição"}</p>
+                      </div>
+                    </div>
+                    <Badge variant="secondary" className="bg-white text-indigo-600 border-indigo-100 whitespace-nowrap">
+                      {new Date(aviso.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+                    </Badge>
+                  </div>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8 text-gray-400">
+                  <Bell className="h-8 w-8 mb-2 opacity-20" />
+                  <p className="text-sm italic">Nenhum aviso agendado</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
