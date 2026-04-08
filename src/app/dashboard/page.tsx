@@ -144,7 +144,7 @@ export default function DashboardPage() {
       <div className="page-header">
         <h1 className="page-title">Dashboard</h1>
         <p className="page-subtitle">
-          Visão geral da Escola Bíblica Dominical • {quarterName}
+          Visão geral da Escola Bíblica Dominical • {quarterName} (v1.2)
         </p>
       </div>
 
