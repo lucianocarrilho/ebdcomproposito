@@ -13,11 +13,11 @@ export async function GET(request: NextRequest) {
 
     const manualLeaders = await prisma.leader.findMany({
       where: leaderWhere,
+      include: { class: { select: { id: true, name: true } } },
       orderBy: { name: "asc" },
     });
  
     // 2. Buscar da tabela de Usuários (Gestão de Acesso)
-    // Somente se não estivermos filtrando por algo que não seja professor/admin
     const users = await prisma.user.findMany({
       where: {
         role: { in: ["ADMIN", "PROFESSOR"] },
@@ -26,22 +26,41 @@ export async function GET(request: NextRequest) {
       select: { id: true, name: true, role: true, email: true, image: true },
     });
  
-    // Converter cargos de User para o formato de Leader
-    const userLeaders = users.map(u => ({
-      id: u.id,
-      name: u.name,
-      role: u.role === "PROFESSOR" ? "PROFESSOR" : "DIRIGENTE",
-      email: u.email,
-      photo: u.image,
-    }));
+    // 3. Identificar usuários que NÃO existem ainda na tabela Leaders (pelo nome)
+    const existingLeaderNames = new Set(manualLeaders.map(l => l.name.toLowerCase()));
+    const missingUsers = users.filter(u => !existingLeaderNames.has(u.name.toLowerCase()));
 
-    // 3. Juntar e remover duplicados pelo nome
-    const combined = [...manualLeaders, ...userLeaders];
+    // 4. Auto-criar registros na tabela Leaders para usuários que faltam
+    // Isso garante que a chamada de presença funcione corretamente (foreign key)
+    if (missingUsers.length > 0) {
+      console.log("[Leaders] Auto-criando líderes para usuários:", missingUsers.map(u => u.name));
+      
+      for (const u of missingUsers) {
+        try {
+          const newLeader = await prisma.leader.create({
+            data: {
+              name: u.name,
+              role: u.role === "PROFESSOR" ? "Professor" : "Dirigente",
+              email: u.email,
+              photo: u.image,
+              active: true,
+            },
+          });
+          // Adicionar o novo líder à lista
+          manualLeaders.push(newLeader as any);
+        } catch (err: any) {
+          console.error(`[Leaders] Erro ao auto-criar líder para ${u.name}:`, err?.message);
+        }
+      }
+    }
+
+    // 5. Juntar e remover duplicados pelo nome
+    const combined = [...manualLeaders];
     
-    // Usar Map para garantir nomes únicos (preferindo o da tabela User se houver conflito)
+    // Adicionar users que já existem como leaders (não duplicar)
+    // Mas precisamos garantir que usamos o ID da tabela leaders
     const uniqueMap = new Map();
     combined.forEach(l => {
-      // Se já existe e é de Leader, o User sobrescreve (costuma ser mais atualizado)
       if (!uniqueMap.has(l.name.toLowerCase())) {
         uniqueMap.set(l.name.toLowerCase(), l);
       }
