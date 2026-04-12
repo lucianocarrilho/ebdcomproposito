@@ -67,17 +67,19 @@ export default function VisitantesPage() {
     setSubmitting(true);
     const fd = new FormData(e.currentTarget);
     
+    const invitedByRaw = fd.get("invitedById") as string;
     const payload = {
       name: fd.get("visitorName"),
       date: fd.get("date"),
       classId: fd.get("classId"),
-      invitedById: fd.get("invitedById") || null,
+      invitedById: (!invitedByRaw || invitedByRaw === "none") ? null : invitedByRaw,
       observations: fd.get("observations"),
     };
 
     try {
       const res = await fetch("/api/visitors", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 

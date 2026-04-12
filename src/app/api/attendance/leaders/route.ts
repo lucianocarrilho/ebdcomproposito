@@ -2,10 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 
+const ALLOWED_ROLES = ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"];
+
 export async function GET(request: NextRequest) {
   try {
     const session = await auth();
-    if (!session || (session.user as any).role !== "ADMIN") {
+    const userRole = (session?.user as any)?.role;
+    if (!session || !ALLOWED_ROLES.includes(userRole)) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
@@ -33,7 +36,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
-    if (!session || (session.user as any).role !== "ADMIN") {
+    const userRole = (session?.user as any)?.role;
+    if (!session || !ALLOWED_ROLES.includes(userRole)) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
