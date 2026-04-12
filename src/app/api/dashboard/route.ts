@@ -200,6 +200,28 @@ export async function GET() {
       take: 5,
     });
 
+    // Fetch recent visitors (current month)
+    const visitorsWhere: any = {
+      date: { gte: startOfMonth, lte: endOfMonth },
+    };
+    if (allowedClassIds) {
+      visitorsWhere.classId = { in: allowedClassIds };
+    }
+
+    const recentVisitors = await prisma.visitor.findMany({
+      where: visitorsWhere,
+      include: {
+        class: { select: { name: true } },
+        invitedBy: { select: { name: true } },
+      },
+      orderBy: { date: "desc" },
+      take: 10,
+    });
+
+    const totalVisitors = await prisma.visitor.count({
+      where: visitorsWhere,
+    });
+
     return NextResponse.json({
       stats: {
         totalStudents,
@@ -210,8 +232,23 @@ export async function GET() {
         faltas,
         justificadas,
         aniversariantes: aniversariantesDoMes.length,
+        totalVisitors,
       },
-      aniversariantesDoMes: aniversariantesDoMes.slice(0, 5),
+      aniversariantesDoMes: aniversariantesDoMes
+        .sort((a, b) => {
+          const dayA = a.birthDate!.getUTCDate();
+          const dayB = b.birthDate!.getUTCDate();
+          return dayA - dayB;
+        })
+        .slice(0, 8),
+      recentVisitors: recentVisitors.map(v => ({
+        id: v.id,
+        name: v.name,
+        date: v.date,
+        className: v.class?.name,
+        invitedByName: v.invitedBy?.name || null,
+        observations: v.observations,
+      })),
       avisosCalendario: avisosCalendario.map(a => ({
         id: a.id,
         title: a.title,
