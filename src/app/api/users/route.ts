@@ -40,6 +40,28 @@ export async function POST(request: NextRequest) {
     });
  
     if (existingUser) {
+      // Se o usuário existe mas está inativo, reativar com os novos dados
+      if (!existingUser.active) {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const reactivated = await prisma.user.update({
+          where: { id: existingUser.id },
+          data: {
+            name,
+            password: hashedPassword,
+            role,
+            image,
+            active: true,
+          },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            image: true,
+          },
+        });
+        return NextResponse.json(reactivated, { status: 201 });
+      }
       return NextResponse.json({ error: "Email já cadastrado" }, { status: 400 });
     }
  
