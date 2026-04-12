@@ -133,7 +133,9 @@ export default function LiderancaPage() {
   const handleSaveAttendance = async () => {
     setSavingAttendance(true);
     try {
-      const items = Object.values(attendanceItems);
+      const items = Object.values(attendanceItems).filter(item => item.leaderId);
+      console.log("[Lideranca] Salvando chamada:", { date: attendanceDate, itemCount: items.length });
+      
       const res = await fetch("/api/attendance/leaders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -143,9 +145,12 @@ export default function LiderancaPage() {
       if (res.ok) {
         toast.success("Chamada da Liderança salva!");
       } else {
-        toast.error("Erro ao salvar chamada");
+        const errorData = await res.json().catch(() => ({}));
+        console.error("[Lideranca] Erro API:", res.status, errorData);
+        toast.error(errorData?.details || errorData?.error || "Erro ao salvar chamada");
       }
     } catch (error) {
+      console.error("[Lideranca] Erro conexão:", error);
       toast.error("Erro de conexão");
     } finally {
       setSavingAttendance(false);
