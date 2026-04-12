@@ -56,7 +56,8 @@ export default function VisitantesPage() {
       ]);
       setClasses(await resClasses.json());
       const studentsJson = await resStudents.json();
-      setStudents(studentsJson.students || []);
+      // API retorna array direto OU pode retornar { students: [...] }
+      setStudents(Array.isArray(studentsJson) ? studentsJson : (studentsJson.students || []));
     } catch (err) {
       console.error("Erro ao carregar opções do formulário");
     }
