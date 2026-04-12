@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, Search, UserPlus, Trophy, Gift, Loader2, User } from "lucide-react";
+import { Plus, Search, UserPlus, Trophy, Loader2, User, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,8 +18,12 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { useSession } from "next-auth/react";
 
 export default function VisitantesPage() {
+  const { data: session } = useSession();
+  const isAdmin = (session?.user as any)?.role === "ADMIN";
+
   const [visitors, setVisitors] = useState<any[]>([]);
   const [ranking, setRanking] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
@@ -28,6 +32,15 @@ export default function VisitantesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // Edit/Delete states
+  const [editingVisitor, setEditingVisitor] = useState<any>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // Controlled form states for edit
+  const [formClassId, setFormClassId] = useState("");
+  const [formInvitedById, setFormInvitedById] = useState("none");
 
   useEffect(() => {
     fetchData();
@@ -56,11 +69,24 @@ export default function VisitantesPage() {
       ]);
       setClasses(await resClasses.json());
       const studentsJson = await resStudents.json();
-      // API retorna array direto OU pode retornar { students: [...] }
       setStudents(Array.isArray(studentsJson) ? studentsJson : (studentsJson.students || []));
     } catch (err) {
       console.error("Erro ao carregar opções do formulário");
     }
+  };
+
+  const openNewDialog = () => {
+    setEditingVisitor(null);
+    setFormClassId("");
+    setFormInvitedById("none");
+    setIsDialogOpen(true);
+  };
+
+  const openEditDialog = (visitor: any) => {
+    setEditingVisitor(visitor);
+    setFormClassId(visitor.classId || "");
+    setFormInvitedById(visitor.invitedById || "none");
+    setIsDialogOpen(true);
   };
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -68,39 +94,63 @@ export default function VisitantesPage() {
     setSubmitting(true);
     const fd = new FormData(e.currentTarget);
     
-    const invitedByRaw = fd.get("invitedById") as string;
     const payload = {
       name: fd.get("visitorName"),
       date: fd.get("date"),
-      classId: fd.get("classId"),
-      invitedById: (!invitedByRaw || invitedByRaw === "none") ? null : invitedByRaw,
+      classId: formClassId,
+      invitedById: (!formInvitedById || formInvitedById === "none") ? null : formInvitedById,
       observations: fd.get("observations"),
     };
 
     try {
-      const res = await fetch("/api/visitors", {
-        method: "POST",
+      const url = editingVisitor ? `/api/visitors/${editingVisitor.id}` : "/api/visitors";
+      const method = editingVisitor ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       if (res.ok) {
-        toast.success("Visitante registrado com sucesso!");
+        toast.success(editingVisitor ? "Visitante atualizado!" : "Visitante registrado com sucesso!");
         setIsDialogOpen(false);
-        fetchData(); // Refresh list and ranking
+        setEditingVisitor(null);
+        fetchData();
       } else {
-        throw new Error();
+        const errorData = await res.json().catch(() => ({}));
+        toast.error(errorData.error || "Erro ao salvar visitante");
       }
     } catch (err) {
-      toast.error("Erro ao registrar visitante");
+      toast.error("Erro de conexão");
     } finally {
       setSubmitting(false);
     }
   };
 
+  const handleDelete = async () => {
+    if (!deleteConfirm) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/visitors/${deleteConfirm}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Visitante excluído");
+        setDeleteConfirm(null);
+        fetchData();
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        toast.error(errorData.error || "Erro ao excluir");
+      }
+    } catch (err) {
+      toast.error("Erro de conexão");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const filtered = visitors.filter(v =>
     v.name.toLowerCase().includes(search.toLowerCase()) ||
-    v.invitedBy?.name.toLowerCase().includes(search.toLowerCase())
+    v.invitedBy?.name?.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -110,7 +160,7 @@ export default function VisitantesPage() {
           <h1 className="page-title">Visitantes</h1>
           <p className="page-subtitle">{visitors.length} visitantes registrados</p>
         </div>
-        <Button onClick={() => setIsDialogOpen(true)} className=" premium-button">
+        <Button onClick={openNewDialog} className="premium-button">
           <Plus className="h-4 w-4 mr-2" /> Registrar Visitante
         </Button>
       </div>
@@ -200,6 +250,9 @@ export default function VisitantesPage() {
                         <TableHead className="font-bold text-gray-900 uppercase text-[10px] tracking-widest text-center">Data</TableHead>
                         <TableHead className="hidden md:table-cell font-bold text-gray-900 uppercase text-[10px] tracking-widest">Classe</TableHead>
                         <TableHead className="hidden md:table-cell font-bold text-gray-900 uppercase text-[10px] tracking-widest">Convidado por</TableHead>
+                        {isAdmin && (
+                          <TableHead className="font-bold text-gray-900 uppercase text-[10px] tracking-widest text-right pr-4">Ações</TableHead>
+                        )}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -229,11 +282,33 @@ export default function VisitantesPage() {
                           <TableCell className="hidden md:table-cell font-bold text-primary">
                             {v.invitedBy?.name || "—"}
                           </TableCell>
+                          {isAdmin && (
+                            <TableCell className="text-right pr-4">
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-gray-400 hover:text-primary"
+                                  onClick={() => openEditDialog(v)}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-gray-400 hover:text-red-500"
+                                  onClick={() => setDeleteConfirm(v.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))}
                       {filtered.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={4} className="text-center py-10 text-gray-400">
+                          <TableCell colSpan={isAdmin ? 5 : 4} className="text-center py-10 text-gray-400">
                             Nenhum visitante encontrado.
                           </TableCell>
                         </TableRow>
@@ -247,27 +322,47 @@ export default function VisitantesPage() {
         </>
       )}
 
-      {/* Register Visitor Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      {/* Register/Edit Visitor Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) setEditingVisitor(null); }}>
         <DialogContent className="max-w-md rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-xl font-extrabold text-gray-900">Registrar Visitante</DialogTitle>
-            <DialogDescription>Preencha os dados do novo convidado</DialogDescription>
+            <DialogTitle className="text-xl font-extrabold text-gray-900">
+              {editingVisitor ? "Editar Visitante" : "Registrar Visitante"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingVisitor ? "Altere os dados do visitante" : "Preencha os dados do novo convidado"}
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSave} className="space-y-5 pt-4">
             <div className="space-y-2">
               <Label htmlFor="visitorName" className="font-bold">Nome do Visitante</Label>
-              <Input id="visitorName" name="visitorName" required className="h-11 rounded-lg" placeholder="Nome completo" />
+              <Input
+                id="visitorName"
+                name="visitorName"
+                required
+                className="h-11 rounded-lg"
+                placeholder="Nome completo"
+                defaultValue={editingVisitor?.name || ""}
+                key={editingVisitor?.id || "new"}
+              />
             </div>
             
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="date" className="font-bold">Data da Visita</Label>
-                <Input id="date" name="date" type="date" required className="h-11 rounded-lg" defaultValue={new Date().toISOString().split('T')[0]} />
+                <Input
+                  id="date"
+                  name="date"
+                  type="date"
+                  required
+                  className="h-11 rounded-lg"
+                  defaultValue={editingVisitor ? new Date(editingVisitor.date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]}
+                  key={`date-${editingVisitor?.id || "new"}`}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="classId" className="font-bold">Em qual Classe?</Label>
-                <Select name="classId" required>
+                <Select value={formClassId} onValueChange={setFormClassId} required>
                   <SelectTrigger className="h-11 rounded-lg">
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
@@ -280,7 +375,7 @@ export default function VisitantesPage() {
 
             <div className="space-y-2">
               <Label htmlFor="invitedById" className="font-bold">Convidado por qual Aluno?</Label>
-              <Select name="invitedById">
+              <Select value={formInvitedById} onValueChange={setFormInvitedById}>
                 <SelectTrigger className="h-11 rounded-lg">
                   <SelectValue placeholder="Selecione o aluno (opcional)" />
                 </SelectTrigger>
@@ -294,16 +389,49 @@ export default function VisitantesPage() {
 
             <div className="space-y-2">
               <Label htmlFor="observations" className="font-bold">Observações / Contato</Label>
-              <Textarea id="observations" name="observations" className="rounded-lg resize-none" placeholder="Ex: Visitou pela 1ª vez, gostou da aula de jovens..." />
+              <Textarea
+                id="observations"
+                name="observations"
+                className="rounded-lg resize-none"
+                placeholder="Ex: Visitou pela 1ª vez, gostou da aula de jovens..."
+                defaultValue={editingVisitor?.observations || ""}
+                key={`obs-${editingVisitor?.id || "new"}`}
+              />
             </div>
 
             <DialogFooter className="gap-2 sm:gap-0">
-              <Button type="button" variant="ghost" onClick={() => setIsDialogOpen(false)} disabled={submitting}>Cancelar</Button>
+              <Button type="button" variant="ghost" onClick={() => { setIsDialogOpen(false); setEditingVisitor(null); }} disabled={submitting}>Cancelar</Button>
               <Button type="submit" disabled={submitting} className="premium-button min-w-[120px]">
-                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Registrar"}
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : (editingVisitor ? "Salvar Alterações" : "Registrar")}
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+        <DialogContent className="max-w-sm text-center rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-center font-bold text-red-600 border-red-100 pb-2 border-b">Excluir Visitante</DialogTitle>
+            <DialogDescription className="text-center pt-4 text-sm">
+              Tem certeza que deseja excluir este visitante? <br/>
+              <strong>Esta ação é irreversível.</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 mt-6 justify-center">
+            <Button variant="outline" onClick={() => setDeleteConfirm(null)} className="flex-1 rounded-xl" disabled={deleting}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex-1 rounded-xl shadow-lg shadow-red-100"
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sim, Excluir"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
