@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     const visitor = await prisma.visitor.create({
       data: {
         name,
-        date: new Date(date),
+        date: new Date(date + "T12:00:00"),
         classId,
         invitedById: invitedById || null,
         observations,

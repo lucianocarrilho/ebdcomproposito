@@ -162,7 +162,7 @@ export default function AlunoDetalhePage() {
                 </div>
                 <div className="flex-1">
                   <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Nascimento</p>
-                  <p className="text-sm font-medium">{student.birthDate ? new Date(student.birthDate).toLocaleDateString("pt-BR") : "Não informado"}</p>
+                  <p className="text-sm font-medium">{student.birthDate ? new Date(student.birthDate).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "Não informado"}</p>
                 </div>
               </div>
 
@@ -260,7 +260,7 @@ export default function AlunoDetalhePage() {
                         h.status === "FALTA_JUSTIFICADA" ? "bg-amber-500" : "bg-red-500"
                       )} />
                       <div>
-                        <p className="text-sm font-bold text-gray-900">{new Date(h.record.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })}</p>
+                        <p className="text-sm font-bold text-gray-900">{new Date(h.record.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", timeZone: "UTC" })}</p>
                         <p className="text-[10px] text-gray-500 uppercase font-medium tracking-tight">Presença Dominical</p>
                       </div>
                     </div>
@@ -307,7 +307,7 @@ export default function AlunoDetalhePage() {
                       <p className="text-sm font-bold text-gray-900">{v.name}</p>
                       <p className="text-xs text-gray-500 flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
-                        {new Date(v.date).toLocaleDateString("pt-BR")}
+                        {new Date(v.date).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
                       </p>
                     </div>
                   </div>

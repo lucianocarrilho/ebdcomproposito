@@ -205,7 +205,7 @@ export default function DestaquesPage() {
                       </div>
                       <div>
                         <p className="font-bold text-gray-900">{d.student?.name}</p>
-                        <p className="text-xs text-gray-500 font-medium">{d.class?.name} • {new Date(d.date).toLocaleDateString("pt-BR")}</p>
+                        <p className="text-xs text-gray-500 font-medium">{d.class?.name} • {new Date(d.date).toLocaleDateString("pt-BR", { timeZone: "UTC" })}</p>
                         <p className="text-sm text-gray-600 italic mt-1">&ldquo;{d.reason}&rdquo;</p>
                       </div>
                     </div>

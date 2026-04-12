@@ -6,7 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatDate(date: Date | string): string {
-  return new Date(date).toLocaleDateString("pt-BR");
+  return new Date(date).toLocaleDateString("pt-BR", { timeZone: "UTC" });
 }
 
 export function formatDateISO(date: Date | string): string {

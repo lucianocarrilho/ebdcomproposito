@@ -218,7 +218,7 @@ export default function VisitantesPage() {
                           </TableCell>
                           <TableCell className="text-center">
                             <Badge variant="outline" className="font-bold border-gray-200">
-                              {new Date(v.date).toLocaleDateString("pt-BR")}
+                              {new Date(v.date).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
                             </Badge>
                           </TableCell>
                           <TableCell className="hidden md:table-cell">
