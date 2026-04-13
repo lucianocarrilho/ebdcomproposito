@@ -5,7 +5,7 @@ import Image from "next/image";
 import { 
   Plus, Edit, Trash2, Search, Crown, Mail, Phone, 
   Calendar, Info, Loader2, User as UserIcon, Layers,
-  Check, X, MessageSquare, Save
+  Check, X, MessageSquare, Save, FileText
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,6 +75,10 @@ export default function LiderancaPage() {
   const [selectedRole, setSelectedRole] = useState<string>("Professor");
   const [selectedClass, setSelectedClass] = useState<string>("none");
   const [photoUrl, setPhotoUrl] = useState<string>("");
+
+  const [historyLeader, setHistoryLeader] = useState<Leader | null>(null);
+  const [historyData, setHistoryData] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -235,6 +239,23 @@ export default function LiderancaPage() {
     return matchSearch && matchRole;
   });
 
+  const openHistory = async (leader: Leader) => {
+    setHistoryLeader(leader);
+    setLoadingHistory(true);
+    try {
+      const res = await fetch(`/api/leaders/${leader.id}/history`);
+      if (res.ok) {
+        setHistoryData(await res.json());
+      } else {
+        toast.error("Erro ao buscar histórico.");
+      }
+    } catch {
+      toast.error("Erro de conexão.");
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -327,6 +348,9 @@ export default function LiderancaPage() {
                     </TableCell>
                     <TableCell className="text-right pr-4">
                       <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="icon" title="Ver Histórico" className="h-8 w-8 text-indigo-400 hover:text-indigo-600" onClick={() => openHistory(l)}>
+                          <FileText className="h-4 w-4" />
+                        </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-primary" onClick={() => { setEditingLeader(l); setPhotoUrl(l.photo || ""); setIsDialogOpen(true); }}>
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -547,6 +571,82 @@ export default function LiderancaPage() {
               Sim, Remover
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Histórico do Líder */}
+      <Dialog open={!!historyLeader} onOpenChange={() => { setHistoryLeader(null); setHistoryData([]); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <FileText className="h-5 w-5 text-indigo-500" />
+              Histórico de Frequência da Liderança
+            </DialogTitle>
+            <DialogDescription>
+              Acompanhamento de {historyLeader?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="pt-4">
+            {loadingHistory ? (
+              <div className="py-12 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-indigo-500" /></div>
+            ) : historyData.length === 0 ? (
+              <div className="py-12 text-center text-gray-500 italic">Nenhum registro de chamada encontrado para este líder.</div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-around bg-gray-50 rounded-xl p-4 border border-gray-100">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-gray-900">{historyData.length}</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">Total</p>
+                  </div>
+                  <div className="h-10 w-[1px] bg-gray-200"></div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-emerald-600">{historyData.filter(h => h.status === "PRESENTE").length}</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">Presenças</p>
+                  </div>
+                  <div className="h-10 w-[1px] bg-gray-200"></div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-red-600">{historyData.filter(h => h.status === "FALTA").length}</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">Faltas</p>
+                  </div>
+                </div>
+                <div className="max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar border rounded-xl">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50/50">
+                        <TableHead className="font-bold border-b-2">Data da Autuação</TableHead>
+                        <TableHead className="font-bold border-b-2">Status</TableHead>
+                        <TableHead className="font-bold border-b-2">Justificativa Anotada</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {historyData.map(h => (
+                        <TableRow key={h.id} className="hover:bg-gray-50/30 transition-colors">
+                          <TableCell className="font-bold text-gray-900 border-b border-gray-50">
+                            {new Date(h.date).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
+                          </TableCell>
+                          <TableCell className="border-b border-gray-50">
+                            <Badge variant="outline" className={cn("font-bold text-[10px]", 
+                              h.status === "PRESENTE" ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
+                              h.status === "FALTA" ? "bg-red-50 text-red-600 border-red-200" :
+                              "bg-amber-50 text-amber-600 border-amber-200"
+                            )}>
+                              {h.status === "FALTA_JUSTIFICADA" ? "JUSTIFICADA" : h.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-gray-500 text-xs italic border-b border-gray-50">
+                            {h.justification || "-"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="bg-gray-50/50 p-4 -mx-6 -mb-6 mt-2 border-t border-gray-100">
+            <Button onClick={() => setHistoryLeader(null)} className="rounded-xl px-8 shadow-sm">Fechar</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
