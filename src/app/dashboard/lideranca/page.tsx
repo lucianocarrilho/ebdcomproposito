@@ -484,50 +484,47 @@ export default function LiderancaPage() {
       {/* Dialog Criar/Editar */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold">{editingLeader ? "Editar Líder" : "Novo Líder"}</DialogTitle>
-            <DialogDescription>Cadastre os responsáveis pela EBD e classes.</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSave} className="space-y-6 pt-4">
-            <div className="flex gap-6 items-start bg-gray-50 p-6 rounded-2xl">
-              <div className="w-32 flex-shrink-0">
-                <ImageUpload onUpload={setPhotoUrl} defaultImage={photoUrl} label="Foto Perfil" />
-              </div>
-              <div className="flex-1 space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome Completo *</Label>
-                  <Input id="name" name="name" required defaultValue={editingLeader?.name} className="bg-white rounded-xl" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Cargo / Perfil *</Label>
-                  <Select value={selectedRole} onValueChange={setSelectedRole}>
-                    <SelectTrigger className="bg-white rounded-xl"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Dirigente">Dirigente</SelectItem>
-                      <SelectItem value="Vice-Dirigente">Vice-Dirigente</SelectItem>
-                      <SelectItem value="Secretário(a)">Secretário(a)</SelectItem>
-                      <SelectItem value="Vice-Secretário(a)">Vice-Secretário(a)</SelectItem>
-                      <SelectItem value="Professor">Professor</SelectItem>
-                      <SelectItem value="Apoio">Apoio</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+          <DialogHeader className="flex flex-col sm:flex-row sm:justify-between items-start gap-4 pr-6">
+            <div>
+              <DialogTitle className="text-xl font-bold">{editingLeader ? "Editar Líder" : "Novo Líder"}</DialogTitle>
+              <DialogDescription className="mt-1">Cadastre os responsáveis pela EBD e classes.</DialogDescription>
             </div>
-            
-            <div className="grid grid-cols-2 gap-4">
+            <div className="w-full sm:w-auto sm:-mt-2">
+              <ImageUpload onUpload={setPhotoUrl} defaultImage={photoUrl} label="Foto Perfil" />
+            </div>
+          </DialogHeader>
+          <form onSubmit={handleSave} className="space-y-6 pt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 bg-gray-50 p-6 rounded-2xl">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome Completo *</Label>
+                <Input id="name" name="name" required defaultValue={editingLeader?.name} className="bg-white rounded-xl" />
+              </div>
+              <div className="space-y-2">
+                <Label>Cargo / Perfil *</Label>
+                <Select value={selectedRole} onValueChange={setSelectedRole}>
+                  <SelectTrigger className="bg-white rounded-xl"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Dirigente">Dirigente</SelectItem>
+                    <SelectItem value="Vice-Dirigente">Vice-Dirigente</SelectItem>
+                    <SelectItem value="Secretário(a)">Secretário(a)</SelectItem>
+                    <SelectItem value="Vice-Secretário(a)">Vice-Secretário(a)</SelectItem>
+                    <SelectItem value="Professor">Professor</SelectItem>
+                    <SelectItem value="Apoio">Apoio</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Telefone</Label>
-                <Input id="phone" name="phone" defaultValue={editingLeader?.phone || ""} className="rounded-xl" />
+                <Input id="phone" name="phone" defaultValue={editingLeader?.phone || ""} className="bg-white rounded-xl" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" name="email" type="email" defaultValue={editingLeader?.email || ""} className="rounded-xl" />
+                <Input id="email" name="email" type="email" defaultValue={editingLeader?.email || ""} className="bg-white rounded-xl" />
               </div>
               <div className="space-y-2">
                 <Label>Classe Selecionada</Label>
                 <Select value={selectedClass} onValueChange={setSelectedClass}>
-                  <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="bg-white rounded-xl"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Sede / Geral</SelectItem>
                     {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
@@ -536,7 +533,7 @@ export default function LiderancaPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="startDate">Data Início</Label>
-                <Input id="startDate" name="startDate" type="date" defaultValue={editingLeader?.startDate?.split("T")[0]} className="rounded-xl" />
+                <Input id="startDate" name="startDate" type="date" defaultValue={editingLeader?.startDate?.split("T")[0]} className="bg-white rounded-xl" />
               </div>
             </div>
             <DialogFooter>
