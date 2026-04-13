@@ -81,10 +81,35 @@ export async function GET(request: NextRequest) {
       summary.schoolFreq = Math.round((summary.totalPresent / summary.totalEnrolled) * 100);
     }
 
+    // 3. Buscar Chamada da Liderança
+    const activeLeadersCount = await prisma.leader.count({ where: { active: true } });
+    const leaderRecords = await prisma.leaderAttendance.findMany({
+      where: { date: { gte: date, lt: nextDay } }
+    });
+
+    let leaderPresent = 0;
+    let leaderAbsent = 0;
+    let leaderJustified = 0;
+    
+    leaderRecords.forEach(r => {
+      if (r.status === AttendanceStatus.PRESENTE) leaderPresent++;
+      else if (r.status === AttendanceStatus.FALTA) leaderAbsent++;
+      else if (r.status === AttendanceStatus.FALTA_JUSTIFICADA) leaderJustified++;
+    });
+
+    const leadersSummary = {
+      enrolled: activeLeadersCount,
+      present: leaderPresent,
+      absent: leaderAbsent,
+      justified: leaderJustified,
+      freq: activeLeadersCount > 0 ? Math.round((leaderPresent / activeLeadersCount) * 100) : 0
+    };
+
     return NextResponse.json({
       date: dateStr,
       summary,
-      classes: reportData
+      classes: reportData,
+      leaders: leadersSummary
     });
   } catch (error) {
     console.error("Erro ao gerar mapa do dia:", error);

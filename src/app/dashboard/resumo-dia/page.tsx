@@ -37,6 +37,13 @@ interface DailySummary {
     visitors: number;
     freq: number;
   }[];
+  leaders?: {
+    enrolled: number;
+    present: number;
+    absent: number;
+    justified: number;
+    freq: number;
+  };
 }
 
 export default function ResumoDiaPage() {
@@ -121,6 +128,24 @@ export default function ResumoDiaPage() {
       theme: 'striped',
       headStyles: { fillColor: [71, 85, 105] }
     });
+
+    if (data.leaders) {
+      doc.text("Liderança e Equipe", 15, (doc as any).lastAutoTable.finalY + 15);
+      autoTable(doc, {
+        startY: (doc as any).lastAutoTable.finalY + 20,
+        head: [['Equipe', 'Ativos', 'Pres.', 'Faltas', 'Justific.', 'Freq %']],
+        body: [[
+          'Liderança',
+          data.leaders.enrolled,
+          data.leaders.present,
+          data.leaders.absent,
+          data.leaders.justified,
+          `${data.leaders.freq}%`
+        ]],
+        theme: 'grid',
+        headStyles: { fillColor: [30, 58, 95] }
+      });
+    }
 
     doc.save(`mapa-geral-ebd-${date}.pdf`);
   };
@@ -259,6 +284,27 @@ export default function ResumoDiaPage() {
                         </TableCell>
                       </TableRow>
                     ))}
+                    
+                    {/* Linha da Liderança */}
+                    {data.leaders && (
+                      <TableRow className="bg-indigo-50/50 hover:bg-indigo-50/80 transition-colors border-t-2 border-indigo-100">
+                        <TableCell className="font-bold text-indigo-900 pl-6 py-4 flex items-center gap-2">
+                          <Users className="h-4 w-4 text-indigo-500" />
+                          Liderança (Equipe)
+                        </TableCell>
+                        <TableCell className="text-center font-medium text-indigo-700">{data.leaders.enrolled}</TableCell>
+                        <TableCell className="text-center font-extrabold text-emerald-700">{data.leaders.present}</TableCell>
+                        <TableCell className="text-center font-extrabold text-red-700">{data.leaders.absent}</TableCell>
+                        <TableCell className="text-center font-extrabold text-amber-700">{data.leaders.justified}</TableCell>
+                        <TableCell className="text-center text-gray-400">-</TableCell>
+                        <TableCell className="text-center font-bold text-indigo-700 pr-6">
+                          <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-700 font-extrabold">
+                            {data.leaders.freq}%
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    )}
+
                     {/* Linha de Totais da Tabela */}
                     <TableRow className="bg-gray-900 text-white font-bold hover:bg-gray-900">
                       <TableCell className="pl-6 py-4">TOTAIS GERAIS</TableCell>
