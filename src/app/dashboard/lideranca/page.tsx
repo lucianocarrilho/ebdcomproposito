@@ -279,6 +279,8 @@ export default function LiderancaPage() {
                 <SelectItem value="Todos">Todos os Cargos</SelectItem>
                 <SelectItem value="Dirigente">Dirigente</SelectItem>
                 <SelectItem value="Vice-Dirigente">Vice-Dirigente</SelectItem>
+                <SelectItem value="Secretário(a)">Secretário(a)</SelectItem>
+                <SelectItem value="Vice-Secretário(a)">Vice-Secretário(a)</SelectItem>
                 <SelectItem value="Professor">Professor</SelectItem>
               </SelectContent>
             </Select>
@@ -479,6 +481,8 @@ export default function LiderancaPage() {
                     <SelectContent>
                       <SelectItem value="Dirigente">Dirigente</SelectItem>
                       <SelectItem value="Vice-Dirigente">Vice-Dirigente</SelectItem>
+                      <SelectItem value="Secretário(a)">Secretário(a)</SelectItem>
+                      <SelectItem value="Vice-Secretário(a)">Vice-Secretário(a)</SelectItem>
                       <SelectItem value="Professor">Professor</SelectItem>
                       <SelectItem value="Apoio">Apoio</SelectItem>
                     </SelectContent>
