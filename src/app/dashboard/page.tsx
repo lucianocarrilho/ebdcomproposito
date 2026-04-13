@@ -146,7 +146,6 @@ export default function DashboardPage() {
     { label: "Justificadas", value: data.stats.justificadas, icon: FileText, color: "text-amber-600", bg: "bg-amber-50" },
     { label: "Professores", value: data.stats.totalLeaders, icon: Crown, color: "text-indigo-600", bg: "bg-indigo-50" },
     { label: "Aniversariantes", value: data.stats.aniversariantes, icon: Cake, color: "text-pink-600", bg: "bg-pink-50" },
-    { label: "Visitantes do Mês", value: data.stats.totalVisitors, icon: UserPlus, color: "text-teal-600", bg: "bg-teal-50" },
   ];
 
   return (
@@ -370,7 +369,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Avisos Agendados */}
         <Card>
           <CardHeader>
@@ -405,51 +404,6 @@ export default function DashboardPage() {
                 <div className="flex flex-col items-center justify-center p-8 text-gray-400">
                   <Bell className="h-8 w-8 mb-2 opacity-20" />
                   <p className="text-sm italic">Nenhum aviso agendado</p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Visitantes do Mês */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <UserPlus className="h-5 w-5 text-teal-500" />
-              Visitantes do Mês
-              <Badge variant="secondary" className="ml-auto bg-teal-50 text-teal-700 border-teal-100">
-                {data.stats.totalVisitors}
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {data.recentVisitors?.length > 0 ? (
-                data.recentVisitors.map((v) => (
-                  <div
-                    key={v.id}
-                    className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-all hover:scale-[1.01]"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-teal-50 flex items-center justify-center flex-shrink-0">
-                        <User className="h-5 w-5 text-teal-500" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-gray-900">{v.name}</p>
-                        <p className="text-xs text-gray-500">
-                          {v.className}{v.invitedByName ? ` • Convidado por ${v.invitedByName}` : ""}
-                        </p>
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="text-teal-600 border-teal-200 whitespace-nowrap text-[10px]">
-                      {new Date(v.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" })}
-                    </Badge>
-                  </div>
-                ))
-              ) : (
-                <div className="flex flex-col items-center justify-center p-8 text-gray-400">
-                  <UserPlus className="h-8 w-8 mb-2 opacity-20" />
-                  <p className="text-sm italic">Nenhum visitante registrado este mês</p>
                 </div>
               )}
             </div>
