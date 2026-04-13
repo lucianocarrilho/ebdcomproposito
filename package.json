@@ -7,7 +7,7 @@
     "build": "npx prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "deploy": "node deploy.mjs"
+    "deploy": "echo \"DEPLOY: Apenas faça 'git push'. O projeto está hospedado na Vercel e o GitHub já realiza o deploy automaticamente. (O DB fica na Hostinger)\""
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
