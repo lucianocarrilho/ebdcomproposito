@@ -96,7 +96,32 @@ export async function GET() {
       },
     });
 
-    const aniversariantesDoMes = aniversariantes.filter((a) => {
+    const aniversariantesUsers = await prisma.user.findMany({
+      where: {
+        active: true,
+        birthDate: { not: null },
+      },
+      select: {
+        id: true,
+        name: true,
+        birthDate: true,
+        image: true,
+        role: true,
+      },
+    });
+
+    const allAniversariantes = [
+      ...aniversariantes,
+      ...aniversariantesUsers.map(u => ({ 
+        id: u.id, 
+        name: u.name, 
+        birthDate: u.birthDate, 
+        photo: u.image, 
+        class: { name: `Equipe (${u.role})` } 
+      }))
+    ];
+
+    const aniversariantesDoMes = allAniversariantes.filter((a) => {
       if (!a.birthDate) return false;
       return a.birthDate.getUTCMonth() + 1 === currentMonth;
     });

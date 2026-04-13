@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
         role: true,
         createdAt: true,
         image: true,
+        birthDate: true,
       },
       orderBy: { name: "asc" },
     });
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, email, password, role, image } = body;
+    const { name, email, password, role, image, birthDate } = body;
  
     if (!name || !email || !password || !role) {
       return NextResponse.json({ error: "Todos os campos são obrigatórios" }, { status: 400 });
@@ -50,6 +51,7 @@ export async function POST(request: NextRequest) {
             password: hashedPassword,
             role,
             image,
+            birthDate,
             active: true,
           },
           select: {
@@ -73,6 +75,7 @@ export async function POST(request: NextRequest) {
         password: hashedPassword,
         role,
         image,
+        birthDate,
       },
       select: {
         id: true,

@@ -10,7 +10,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, email, role, password, image } = body;
+    const { name, email, role, password, image, birthDate } = body;
 
     const data: any = { 
       name: name as string, 
@@ -18,6 +18,7 @@ export async function PUT(
       role: role as any,
       image: image as string,
     };
+    if (birthDate) data.birthDate = birthDate;
     
     if (password && (password as string).trim() !== "") {
       data.password = await bcrypt.hash(password, 10);

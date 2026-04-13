@@ -31,6 +31,7 @@ interface User {
   role: string;
   createdAt: string;
   image?: string;
+  birthDate?: string;
 }
 
 export default function UsuariosPage() {
@@ -57,6 +58,7 @@ export default function UsuariosPage() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("APOIO");
   const [image, setImage] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [uploading, setUploading] = useState(false);
  
   useEffect(() => {
@@ -83,12 +85,14 @@ export default function UsuariosPage() {
       setEmail(user.email);
       setRole(user.role);
       setImage(user.image || "");
+      setBirthDate(user.birthDate ? new Date(user.birthDate).toISOString().split('T')[0] : "");
     } else {
       setEditingUser(null);
       setName("");
       setEmail("");
       setRole("APOIO");
       setImage("");
+      setBirthDate("");
     }
     setPassword("");
     setIsDialogOpen(true);
@@ -129,6 +133,7 @@ export default function UsuariosPage() {
       email,
       role,
       image,
+      birthDate: birthDate ? new Date(birthDate + "T12:00:00").toISOString() : undefined,
       password: password || undefined,
     };
  
@@ -349,6 +354,16 @@ export default function UsuariosPage() {
                   <SelectItem value="PROFESSOR">Professor (Sua Classe)</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="birthDate">Data de Aniversário</Label>
+              <Input 
+                id="birthDate" 
+                type="date"
+                className="w-full" 
+                value={birthDate} 
+                onChange={e => setBirthDate(e.target.value)} 
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="userPassword">
