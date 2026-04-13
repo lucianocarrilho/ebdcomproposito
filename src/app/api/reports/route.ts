@@ -29,8 +29,34 @@ export async function GET(request: NextRequest) {
         orderBy: { birthDate: "asc" },
       });
 
+      const users = await prisma.user.findMany({
+        where: {
+          active: true,
+          birthDate: { not: null },
+          ...(classId && classId !== "Todas" ? { classId } : {}),
+        },
+        select: {
+          id: true,
+          name: true,
+          birthDate: true,
+          image: true,
+          role: true
+        }
+      });
+
+      const allMembers = [
+        ...students,
+        ...users.map(u => ({
+          id: u.id,
+          name: u.name,
+          birthDate: u.birthDate,
+          photo: u.image,
+          class: { name: `Equipe (${u.role})` }
+        }))
+      ];
+
       // Filter in-memory for precision with month/day across any year
-      const filteredAniversariantes = students.filter(s => {
+      const filteredAniversariantes = allMembers.filter(s => {
         if (!s.birthDate) return false;
         const bMonth = s.birthDate.getUTCMonth();
         const bDay = s.birthDate.getUTCDate();

@@ -51,8 +51,34 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    const users = await prisma.user.findMany({
+      where: {
+        active: true,
+        birthDate: { not: null }
+      },
+      select: {
+        id: true,
+        name: true,
+        birthDate: true,
+        image: true,
+        role: true
+      }
+    });
+
+    // Merge students and users
+    const allMembers = [
+      ...students,
+      ...users.map(u => ({
+        id: u.id,
+        name: u.name,
+        birthDate: u.birthDate,
+        photo: u.image,
+        class: { name: `Equipe (${u.role})` }
+      }))
+    ];
+
     // Filter by birth month in JS to be DB-agnostic
-    const birthdays = students.filter(s => {
+    const birthdays = allMembers.filter(s => {
       if (!s.birthDate) return false;
       return new Date(s.birthDate).getUTCMonth() + 1 === currentMonth;
     }).map(s => {
