@@ -10,8 +10,8 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type") || "classe";
 
   try {
-    const fromDate = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), 0, 1);
-    const toDate = endDate ? new Date(endDate) : new Date();
+    const fromDate = startDate ? new Date(`${startDate}T00:00:00.000Z`) : new Date(new Date().getFullYear(), 0, 1);
+    const toDate = endDate ? new Date(`${endDate}T23:59:59.999Z`) : new Date();
 
     const classWhere: any = {};
     if (classId && classId !== "Todas") {
@@ -91,7 +91,33 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ students: studentData });
     }
 
-    // --- 3. HANDLE CLASS SUMMARY (DEFAULT) ---
+    // --- 3. HANDLE VISITORS (VISITANTES) ---
+    if (type === "visitantes") {
+      const visitors = await prisma.visitor.findMany({
+        where: {
+          date: { gte: fromDate, lte: toDate },
+          ...(classId && classId !== "Todas" ? { classId } : {}),
+        },
+        include: {
+          class: true,
+          invitedBy: true
+        },
+        orderBy: { date: "desc" }
+      });
+
+      const visitantes = visitors.map(v => ({
+        id: v.id,
+        name: v.name,
+        date: v.date,
+        classe: v.class.name,
+        convidadoPor: v.invitedBy ? v.invitedBy.name : "-",
+        observations: v.observations
+      }));
+
+      return NextResponse.json({ visitantes });
+    }
+
+    // --- 4. HANDLE CLASS SUMMARY (DEFAULT) ---
     const classes = await prisma.class.findMany({
       where: classWhere,
       include: {

@@ -200,6 +200,21 @@ export default function RelatoriosPage() {
           headStyles: { fillColor: [30, 58, 95] },
           styles: { fontSize: 9 }
         });
+      } else if (selectedReport === "visitantes" && data.visitantes) {
+        autoTable(doc, {
+          startY: 50,
+          head: [['Visitante', 'Data', 'Classe', 'Convidado Por', 'Observações']],
+          body: data.visitantes.map((v: any) => [
+            v.name,
+            new Date(v.date).toLocaleDateString('pt-BR'),
+            v.classe,
+            v.convidadoPor,
+            v.observations || '-'
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [30, 58, 95] },
+          styles: { fontSize: 9 }
+        });
       }
 
       // Rodapé
@@ -398,6 +413,55 @@ export default function RelatoriosPage() {
                   <p>Nenhum aniversariante encontrado neste período.</p>
                 </div>
               )}
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    if (selectedReport === "visitantes") {
+      return (
+        <Card className="border-none shadow-premium">
+          <CardHeader>
+            <CardTitle>Visitantes no Período</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b text-gray-500 uppercase text-[10px] font-bold tracking-wider">
+                    <th className="pb-3 px-2">Visitante</th>
+                    <th className="pb-3 px-2">Data</th>
+                    <th className="pb-3 px-2">Classe</th>
+                    <th className="pb-3 px-2">Convidado Por</th>
+                    <th className="pb-3 px-2">Observações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {data.visitantes && data.visitantes.length > 0 ? (
+                    data.visitantes.map((v: any) => (
+                      <tr key={v.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="py-3 px-2 font-medium text-gray-900">{v.name}</td>
+                        <td className="py-3 px-2 text-gray-600">{new Date(v.date).toLocaleDateString('pt-BR')}</td>
+                        <td className="py-3 px-2 text-gray-600">
+                          <Badge variant="outline" className="font-normal">{v.classe}</Badge>
+                        </td>
+                        <td className="py-3 px-2 text-gray-600">{v.convidadoPor}</td>
+                        <td className="py-3 px-2 text-gray-500 italic max-w-xs truncate" title={v.observations || ""}>
+                          {v.observations || '-'}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="py-10 text-center text-gray-500 font-medium bg-gray-50/30 rounded-lg">
+                        <UserPlus className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                        Nenhum visitante registrado neste período.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </CardContent>
         </Card>
