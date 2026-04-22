@@ -16,7 +16,25 @@ import { toast } from "sonner";
 export function NotificationTray() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showPermissionBanner, setShowPermissionBanner] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const prevCountRef = useRef(0);
+
+  // Solicita permissão de notificação (necessário para badge no iOS)
+  const requestNotificationPermission = async () => {
+    try {
+      if ('Notification' in window && Notification.permission === 'default') {
+        const result = await Notification.requestPermission();
+        if (result === 'granted') {
+          setShowPermissionBanner(false);
+          // Após obter permissão, atualiza o badge imediatamente
+          updateAppBadge(unreadCount);
+        }
+      }
+    } catch (e) {
+      console.log('Erro ao solicitar permissão:', e);
+    }
+  };
 
   const fetchNotifications = async () => {
     try {
@@ -25,9 +43,10 @@ export function NotificationTray() {
         const data = await res.json();
         
         // Se o número de notificações aumentou, toca o som!
-        if (data.length > notifications.length && notifications.length > 0) {
+        if (data.length > prevCountRef.current && prevCountRef.current > 0) {
           playAlertSound();
         }
+        prevCountRef.current = data.length;
         
         setNotifications(data);
         const unread = data.filter((n: any) => !n.isRead).length;
@@ -43,6 +62,7 @@ export function NotificationTray() {
 
   const updateAppBadge = (count: number) => {
     try {
+      // Tenta usar a Badging API diretamente
       if ('setAppBadge' in navigator) {
         if (count > 0) {
           (navigator as any).setAppBadge(count);
@@ -50,7 +70,7 @@ export function NotificationTray() {
           (navigator as any).clearAppBadge();
         }
       }
-      // Also update via service worker for broader support
+      // Também envia para o service worker
       if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({
           type: 'SET_BADGE',
@@ -71,8 +91,19 @@ export function NotificationTray() {
   useEffect(() => {
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 60000); // Verifica a cada 1 minuto
+    
+    // Verifica se precisa mostrar o banner de permissão
+    if ('Notification' in window && Notification.permission === 'default') {
+      // Mostra o banner após 3 segundos para não ser intrusivo
+      const timer = setTimeout(() => setShowPermissionBanner(true), 3000);
+      return () => {
+        clearInterval(interval);
+        clearTimeout(timer);
+      };
+    }
+    
     return () => clearInterval(interval);
-  }, [notifications.length]);
+  }, []);
 
   const markAsRead = async (id: string) => {
     if (id.startsWith("bday-")) return; // Birthdays are dynamic
@@ -120,6 +151,32 @@ export function NotificationTray() {
             </h3>
           </div>
           
+          {/* Banner para ativar notificações (necessário para badge no ícone) */}
+          {showPermissionBanner && (
+            <div className="p-3 bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-100">
+              <div className="flex items-start gap-2">
+                <div className="h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                  <Bell className="h-4 w-4 text-amber-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs font-bold text-amber-800">Ative as notificações!</p>
+                  <p className="text-[10px] text-amber-600 leading-relaxed mt-0.5">Para ver o contador de avisos no ícone do app na sua tela inicial.</p>
+                  <button 
+                    onClick={requestNotificationPermission}
+                    className="mt-2 px-3 py-1.5 bg-amber-500 text-white text-[10px] font-bold rounded-lg hover:bg-amber-600 active:scale-95 transition-all shadow-sm"
+                  >
+                    ATIVAR AGORA
+                  </button>
+                </div>
+                <button 
+                  onClick={() => setShowPermissionBanner(false)}
+                  className="text-amber-400 hover:text-amber-600 text-lg leading-none p-1"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          )}
           <div className="max-h-[350px] overflow-y-auto scrollbar-hide">
             {notifications.length > 0 ? (
               notifications.map((n) => (
