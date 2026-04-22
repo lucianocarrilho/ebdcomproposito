@@ -30,10 +30,35 @@ export function NotificationTray() {
         }
         
         setNotifications(data);
-        setUnreadCount(data.filter((n: any) => !n.isRead).length);
+        const unread = data.filter((n: any) => !n.isRead).length;
+        setUnreadCount(unread);
+        
+        // Atualiza o badge no ícone do app (home screen)
+        updateAppBadge(unread);
       }
     } catch (error) {
       console.error("Erro ao buscar notificações:", error);
+    }
+  };
+
+  const updateAppBadge = (count: number) => {
+    try {
+      if ('setAppBadge' in navigator) {
+        if (count > 0) {
+          (navigator as any).setAppBadge(count);
+        } else {
+          (navigator as any).clearAppBadge();
+        }
+      }
+      // Also update via service worker for broader support
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'SET_BADGE',
+          count: count,
+        });
+      }
+    } catch (e) {
+      console.log('Badge API não suportada:', e);
     }
   };
 
