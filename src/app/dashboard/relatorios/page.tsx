@@ -150,7 +150,12 @@ export default function RelatoriosPage() {
       const typeWidth = doc.getTextWidth(typeText);
       doc.text(typeText, (pageWidth - typeWidth) / 2, 30);
       
-      const periodText = `Período: ${new Date(dateFrom).toLocaleDateString()} a ${new Date(dateTo).toLocaleDateString()}`;
+      // Formatar datas sem conversão UTC (evita erro de fuso horário)
+      const formatDateBR = (dateStr: string) => {
+        const [y, m, d] = dateStr.split('-');
+        return `${d}/${m}/${y}`;
+      };
+      const periodText = `Período: ${formatDateBR(dateFrom)} a ${formatDateBR(dateTo)}`;
       const periodWidth = doc.getTextWidth(periodText);
       doc.text(periodText, (pageWidth - periodWidth) / 2, 36);
 
@@ -162,11 +167,13 @@ export default function RelatoriosPage() {
       if (selectedReport === "classe" && data.classData) {
         autoTable(doc, {
           startY: 50,
-          head: [['Classe', 'Alunos', 'Presenças', 'Frequência %']],
+          head: [['Classe', 'Alunos', 'Presenças', 'Faltas', 'Justif.', 'Frequência %']],
           body: data.classData.map((c: any) => [
             c.classe,
             c.matriculados,
-            c.presencas || (c.matriculados - c.faltas),
+            c.matriculados - c.faltas - c.justificadas,
+            c.faltas,
+            c.justificadas,
             `${c.mediaFreq}%`
           ]),
           theme: 'striped',
