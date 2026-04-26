@@ -61,6 +61,7 @@ model Class {
   visitors      Visitor[]
   quarterHighlights QuarterHighlight[]
   users         User[]    @relation("UserClass")
+  photoAlbums   PhotoAlbum[]
   
   @@map("classes")
 }
@@ -303,4 +304,33 @@ model NotificationRead {
   
   @@unique([notificationId, userId])
   @@map("notification_reads")
+}
+
+model PhotoAlbum {
+  id          String   @id @default(cuid())
+  title       String
+  description String?  @db.Text
+  date        DateTime
+  type        String   @default("aula") // aula, evento, outro
+  classId     String?
+  class       Class?   @relation(fields: [classId], references: [id])
+  coverUrl    String?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  photos      PhotoItem[]
+
+  @@map("photo_albums")
+}
+
+model PhotoItem {
+  id        String     @id @default(cuid())
+  albumId   String
+  album     PhotoAlbum @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  url       String
+  caption   String?
+  createdAt DateTime   @default(now())
+
+  @@map("photo_items")
 }

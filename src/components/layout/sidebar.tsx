@@ -24,6 +24,7 @@ import {
   ChevronLeft,
   Crown,
   Fingerprint,
+  Camera,
 } from "lucide-react";
 
 import { useSession } from "next-auth/react";
@@ -38,6 +39,7 @@ const navigation = [
   { name: "Lições", href: "/dashboard/licoes", icon: BookOpen, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
   { name: "Visitantes", href: "/dashboard/visitantes", icon: UserPlus, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
   { name: "Destaques", href: "/dashboard/destaques", icon: Star, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
+  { name: "Fotos", href: "/dashboard/fotos", icon: Camera, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
   { name: "Relatórios", href: "/dashboard/relatorios", icon: BarChart3, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "APOIO"] },
   { name: "Calendário", href: "/dashboard/calendario", icon: Calendar, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
   { name: "Comunicados", href: "/dashboard/avisos", icon: MessageSquare, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "APOIO"] },
