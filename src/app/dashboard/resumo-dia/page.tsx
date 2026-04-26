@@ -90,7 +90,9 @@ export default function ResumoDiaPage() {
     
     doc.setFontSize(12);
     doc.setTextColor(100);
-    doc.text(`Data: ${new Date(date).toLocaleDateString('pt-BR')}`, pageWidth / 2, 28, { align: "center" });
+    // Formatar data sem conversão UTC (evita erro de fuso horário)
+    const [y, m, d] = date.split('-');
+    doc.text(`Data: ${d}/${m}/${y}`, pageWidth / 2, 28, { align: "center" });
     
     // Resumo Geral
     doc.setFontSize(14);
