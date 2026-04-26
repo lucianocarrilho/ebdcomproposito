@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, Search, FileText, Loader2, User } from "lucide-react";
+import { Plus, Search, FileText, Loader2, User, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,7 @@ interface Justification {
   reason: string;
   observations: string;
   registeredBy: string;
+  isLeader?: boolean;
 }
 
 export default function JustificativasPage() {
@@ -62,7 +63,7 @@ export default function JustificativasPage() {
       <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="page-title">Justificativas</h1>
-          <p className="page-subtitle">Registro de faltas justificadas das classes</p>
+          <p className="page-subtitle">Registro de faltas justificadas das classes e liderança</p>
         </div>
         <Button onClick={() => setIsDialogOpen(true)} className="rounded-full shadow-lg hover:scale-105 active:scale-95 transition-all">
           <Plus className="h-4 w-4 mr-2" /> Nova Justificativa
@@ -97,17 +98,19 @@ export default function JustificativasPage() {
                   </TableCell>
                 </TableRow>
               ) : filtered.map(j => (
-                <TableRow key={j.id} className="hover:bg-gray-50/30 transition-colors">
+                <TableRow key={j.id} className={`hover:bg-gray-50/30 transition-colors ${j.isLeader ? 'bg-amber-50/20' : ''}`}>
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">
-                        {j.studentName.split(" ").map(n => n[0]).slice(0, 2).join("")}
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold ${j.isLeader ? 'bg-amber-100 text-amber-700' : 'bg-primary/10 text-primary'}`}>
+                        {j.isLeader ? <Crown className="h-3.5 w-3.5" /> : j.studentName.split(" ").map(n => n[0]).slice(0, 2).join("")}
                       </div>
                       <span className="font-bold text-gray-700">{j.studentName}</span>
                     </div>
                   </TableCell>
                   <TableCell><Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-100 font-bold">{j.date}</Badge></TableCell>
-                  <TableCell className="hidden md:table-cell"><Badge variant="outline" className="text-gray-500 font-medium">{j.className}</Badge></TableCell>
+                  <TableCell className="hidden md:table-cell">
+                    <Badge variant="outline" className={j.isLeader ? "text-amber-600 border-amber-200 bg-amber-50 font-medium" : "text-gray-500 font-medium"}>{j.className}</Badge>
+                  </TableCell>
                   <TableCell className="hidden md:table-cell font-medium text-gray-600">{j.reason}</TableCell>
                   <TableCell className="hidden lg:table-cell">
                     <div className="flex items-center gap-1.5 text-xs text-gray-400 font-medium">

@@ -46,12 +46,42 @@ export async function GET(request: NextRequest) {
       studentName: j.student.name,
       className: j.student.class.name,
       date: j.date.toLocaleDateString("pt-BR"),
+      dateRaw: j.date,
       reason: j.reason,
       observations: j.observations || "",
-      registeredBy: j.registeredBy?.name || "Sistema"
+      registeredBy: j.registeredBy?.name || "Sistema",
+      isLeader: false
     }));
 
-    return NextResponse.json(formatted);
+    // Buscar justificativas da liderança (LeaderAttendance com status FALTA_JUSTIFICADA)
+    const leaderJustifications = await prisma.leaderAttendance.findMany({
+      where: {
+        status: "FALTA_JUSTIFICADA",
+      },
+      include: {
+        leader: { select: { name: true, role: true } }
+      },
+      orderBy: { date: "desc" }
+    });
+
+    const formattedLeaders = leaderJustifications.map(lj => ({
+      id: lj.id,
+      studentName: lj.leader.name,
+      className: `Liderança (${lj.leader.role})`,
+      date: lj.date.toLocaleDateString("pt-BR"),
+      dateRaw: lj.date,
+      reason: lj.justification || "Falta justificada via chamada",
+      observations: "",
+      registeredBy: "Sistema",
+      isLeader: true
+    }));
+
+    // Mesclar e ordenar por data (mais recente primeiro)
+    const all = [...formatted, ...formattedLeaders]
+      .sort((a, b) => new Date(b.dateRaw).getTime() - new Date(a.dateRaw).getTime())
+      .map(({ dateRaw, ...rest }) => rest);
+
+    return NextResponse.json(all);
   } catch (error) {
     console.error("Erro ao buscar justificativas:", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
