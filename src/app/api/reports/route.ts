@@ -143,7 +143,69 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ visitantes });
     }
 
-    // --- 4. HANDLE CLASS SUMMARY (DEFAULT) ---
+    // --- 4. HANDLE LEADERSHIP FREQUENCY (LIDERANÇA) ---
+    if (type === "lideranca") {
+      const leaders = await prisma.leader.findMany({
+        where: { active: true },
+        include: {
+          class: true,
+          attendance: {
+            where: {
+              date: { gte: fromDate, lte: toDate },
+            },
+          },
+        },
+      });
+
+      const leaderData = leaders.map(l => {
+        const total = l.attendance.length;
+        const presencas = l.attendance.filter(a => a.status === AttendanceStatus.PRESENTE).length;
+        const faltas = l.attendance.filter(a => a.status === AttendanceStatus.FALTA).length;
+        const justificadas = l.attendance.filter(a => a.status === AttendanceStatus.FALTA_JUSTIFICADA).length;
+        const freq = total > 0 ? Math.round((presencas / total) * 100) : 0;
+
+        return {
+          id: l.id,
+          name: l.name,
+          role: l.role,
+          classe: l.class?.name || "Geral",
+          freq,
+          presencas,
+          faltas,
+          justificadas,
+          total,
+          photo: l.photo,
+        };
+      }).sort((a, b) => b.freq - a.freq);
+
+      // Summary
+      const totalLeaders = leaderData.length;
+      let globalItems = 0;
+      let globalPresencas = 0;
+      let globalFaltas = 0;
+      let globalJustificadas = 0;
+      leaders.forEach(l => {
+        l.attendance.forEach(a => {
+          globalItems++;
+          if (a.status === AttendanceStatus.PRESENTE) globalPresencas++;
+          if (a.status === AttendanceStatus.FALTA) globalFaltas++;
+          if (a.status === AttendanceStatus.FALTA_JUSTIFICADA) globalJustificadas++;
+        });
+      });
+      const generalFreq = globalItems > 0 ? Math.round((globalPresencas / globalItems) * 100) : 0;
+
+      return NextResponse.json({
+        summary: {
+          totalLeaders,
+          generalFreq,
+          totalFaltas: globalFaltas,
+          totalJustificadas: globalJustificadas,
+        },
+        leaders: leaderData,
+      });
+    }
+
+    // --- 5. HANDLE CLASS SUMMARY (DEFAULT) ---
     const classes = await prisma.class.findMany({
       where: classWhere,
       include: {

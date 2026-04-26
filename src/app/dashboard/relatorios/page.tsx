@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { BarChart3, Download, FileText, Users, GraduationCap, UserPlus, Cake, Award, Filter, Loader2 } from "lucide-react";
+import { BarChart3, Download, FileText, Users, GraduationCap, UserPlus, Cake, Award, Filter, Loader2, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +22,7 @@ import autoTable from "jspdf-autotable";
 const reportTypes = [
   { id: "aluno", label: "Por Aluno", icon: Users, description: "Frequência individual de cada aluno" },
   { id: "classe", label: "Por Classe", icon: GraduationCap, description: "Dados consolidados por classe" },
+  { id: "lideranca", label: "Liderança", icon: Crown, description: "Frequência da equipe de liderança" },
   { id: "trimestre", label: "Por Trimestre", icon: BarChart3, description: "Resumo trimestral completo" },
   { id: "visitantes", label: "Visitantes", icon: UserPlus, description: "Relatório de visitantes e convidados" },
   { id: "aniversariantes", label: "Aniversariantes", icon: Cake, description: "Aniversariantes do período" },
@@ -210,6 +211,23 @@ export default function RelatoriosPage() {
             v.classe,
             v.convidadoPor,
             v.observations || '-'
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [30, 58, 95] },
+          styles: { fontSize: 9 }
+        });
+      } else if (selectedReport === "lideranca" && data.leaders) {
+        autoTable(doc, {
+          startY: 50,
+          head: [['Líder', 'Cargo', 'Classe', 'Presenças', 'Faltas', 'Justif.', 'Freq %']],
+          body: data.leaders.map((l: any) => [
+            l.name,
+            l.role,
+            l.classe,
+            l.presencas,
+            l.faltas,
+            l.justificadas,
+            `${l.freq}%`
           ]),
           theme: 'striped',
           headStyles: { fillColor: [30, 58, 95] },
@@ -465,6 +483,98 @@ export default function RelatoriosPage() {
             </div>
           </CardContent>
         </Card>
+      );
+    }
+
+    if (selectedReport === "lideranca") {
+      return (
+        <>
+          <Card className="border-none shadow-premium">
+            <CardHeader className="bg-amber-50/30 border-b border-amber-100">
+              <CardTitle className="flex items-center gap-2">
+                <Crown className="h-5 w-5 text-amber-500" />
+                Frequência Individual da Liderança
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b text-gray-500 uppercase text-[10px] font-bold tracking-wider">
+                      <th className="pb-3 px-2">Líder</th>
+                      <th className="pb-3 px-2">Cargo</th>
+                      <th className="pb-3 px-2">Classe</th>
+                      <th className="pb-3 px-2 text-center">Freq. %</th>
+                      <th className="pb-3 px-2 text-center">Presenças</th>
+                      <th className="pb-3 px-2 text-center">Faltas</th>
+                      <th className="pb-3 px-2 text-center">Justif.</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {data.leaders?.map((l: any) => (
+                      <tr key={l.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="py-3 px-2">
+                          <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center flex-shrink-0 border-2 border-white shadow-sm">
+                              {l.photo ? <img src={l.photo} className="h-full w-full object-cover" alt={l.name} /> : <span className="text-xs font-bold text-primary">{l.name?.[0]}</span>}
+                            </div>
+                            <span className="font-medium text-gray-900">{l.name}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-2">
+                          <Badge variant="secondary" className="bg-amber-50 text-amber-700 hover:bg-amber-50 font-bold text-[10px] uppercase">{l.role}</Badge>
+                        </td>
+                        <td className="py-3 px-2 text-gray-600">{l.classe}</td>
+                        <td className="py-3 px-2 text-center">
+                          <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${l.freq >= 75 ? 'bg-emerald-50 text-emerald-600' : l.freq >= 50 ? 'bg-amber-50 text-amber-600' : 'bg-red-50 text-red-600'}`}>
+                            {l.freq}%
+                          </span>
+                        </td>
+                        <td className="py-3 px-2 text-center font-medium text-emerald-600">{l.presencas}</td>
+                        <td className="py-3 px-2 text-center font-medium text-red-600">{l.faltas}</td>
+                        <td className="py-3 px-2 text-center font-medium text-amber-600">{l.justificadas}</td>
+                      </tr>
+                    ))}
+                    {(!data.leaders || data.leaders.length === 0) && (
+                      <tr>
+                        <td colSpan={7} className="py-10 text-center text-gray-500 font-medium bg-gray-50/30 rounded-lg">
+                          <Crown className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                          Nenhum registro de presença da liderança encontrado neste período.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Summary Stats */}
+          {data.summary && (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+              <div className="p-5 rounded-2xl bg-white border border-gray-100 shadow-premium text-center">
+                <Crown className="h-5 w-5 text-amber-500 mx-auto mb-2" />
+                <p className="text-3xl font-extrabold text-gray-900">{data.summary.totalLeaders}</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total de Líderes</p>
+              </div>
+              <div className="p-5 rounded-2xl bg-white border border-gray-100 shadow-premium text-center">
+                <BarChart3 className="h-5 w-5 text-emerald-500 mx-auto mb-2" />
+                <p className="text-3xl font-extrabold text-emerald-600">{data.summary.generalFreq}%</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Frequência Geral</p>
+              </div>
+              <div className="p-5 rounded-2xl bg-white border border-gray-100 shadow-premium text-center">
+                <Filter className="h-5 w-5 text-red-500 mx-auto mb-2" />
+                <p className="text-3xl font-extrabold text-red-600">{data.summary.totalFaltas}</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total de Faltas</p>
+              </div>
+              <div className="p-5 rounded-2xl bg-white border border-gray-100 shadow-premium text-center">
+                <FileText className="h-5 w-5 text-amber-500 mx-auto mb-2" />
+                <p className="text-3xl font-extrabold text-amber-600">{data.summary.totalJustificadas}</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Justificadas</p>
+              </div>
+            </div>
+          )}
+        </>
       );
     }
 

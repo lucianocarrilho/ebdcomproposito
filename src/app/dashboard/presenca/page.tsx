@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Check, X, Clock, UserPlus, CheckCheck, Save, Loader2, AlertTriangle, User } from "lucide-react";
+import { Check, X, Clock, UserPlus, CheckCheck, Save, Loader2, AlertTriangle, User, Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+
+const LIDERANCA_ID = "__LIDERANCA__";
 
 type Status = "PRESENTE" | "FALTA" | "FALTA_JUSTIFICADA" | "VISITANTE" | "";
 
@@ -48,6 +50,8 @@ export default function PresencaPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  const isLeadership = selectedClass === LIDERANCA_ID;
+
   // Carregar classes iniciais
   useEffect(() => {
     async function fetchClasses() {
@@ -67,23 +71,48 @@ export default function PresencaPage() {
     fetchClasses();
   }, []);
 
-  // Carregar alunos quando classe ou data mudar
+  // Carregar alunos/líderes quando classe ou data mudar
   const fetchAttendance = useCallback(async () => {
     if (!selectedClass || !selectedDate) return;
     
     setLoadingStudents(true);
     setSaved(false);
     try {
-      const res = await fetch(`/api/attendance?classId=${selectedClass}&date=${selectedDate}`);
-      const data = await res.json();
-      
-      // Também precisamos das fotos dos alunos, que a API de attendance pode não retornar por padrão
-      // Então vamos garantir que as fotos venham da listagem de estudantes se necessário
-      // Mas para ser eficiente, ajustamos o merging no frontend ou a API.
-      // Vou assumir que a API de attendance retornará student: { photo } se eu ajustar a rota.
-      // Por agora, vamos usar o que temos e o André deve aparecer pelo nome.
-      setStudents(data.students || []);
-      setObservations(data.record?.observations || "");
+      if (selectedClass === LIDERANCA_ID) {
+        // Buscar líderes e presença da liderança
+        const [leadersRes, attRes] = await Promise.all([
+          fetch("/api/leaders"),
+          fetch(`/api/attendance/leaders?date=${selectedDate}`)
+        ]);
+        const leadersData = await leadersRes.json();
+        const attData = await attRes.json();
+        
+        // Mapear presença existente por leaderId
+        const attMap: Record<string, any> = {};
+        if (Array.isArray(attData)) {
+          attData.forEach((item: any) => {
+            attMap[item.leaderId] = item;
+          });
+        }
+        
+        // Montar lista com o mesmo formato de AttendanceStudent
+        const leaderStudents: AttendanceStudent[] = (Array.isArray(leadersData) ? leadersData : []).map((l: any) => ({
+          studentId: l.id,
+          studentName: l.name,
+          status: attMap[l.id]?.status || "",
+          photo: l.photo || null,
+          observations: attMap[l.id]?.justification || "",
+          leaderRole: l.role
+        }));
+        
+        setStudents(leaderStudents);
+        setObservations("");
+      } else {
+        const res = await fetch(`/api/attendance?classId=${selectedClass}&date=${selectedDate}`);
+        const data = await res.json();
+        setStudents(data.students || []);
+        setObservations(data.record?.observations || "");
+      }
     } catch (error) {
       console.error("Erro ao buscar presença:", error);
     } finally {
@@ -110,27 +139,49 @@ export default function PresencaPage() {
     
     setSaving(true);
     try {
-      const res = await fetch("/api/attendance", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          classId: selectedClass,
-          date: selectedDate,
-          observations,
-          items: students.map(s => ({
-            studentId: s.studentId,
-            status: s.status,
-            observations: s.observations
-          }))
-        }),
-      });
+      let res;
+      if (selectedClass === LIDERANCA_ID) {
+        // Salvar chamada da liderança
+        res = await fetch("/api/attendance/leaders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            date: selectedDate,
+            items: students.map(s => ({
+              leaderId: s.studentId,
+              status: s.status || "PRESENTE",
+              justification: s.observations || ""
+            }))
+          }),
+        });
+      } else {
+        res = await fetch("/api/attendance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            classId: selectedClass,
+            date: selectedDate,
+            observations,
+            items: students.map(s => ({
+              studentId: s.studentId,
+              status: s.status,
+              observations: s.observations
+            }))
+          }),
+        });
+      }
 
       if (res.ok) {
         setSaved(true);
+        toast.success(isLeadership ? "Chamada da Liderança salva!" : "Chamada salva!");
         setTimeout(() => setSaved(false), 3000);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        toast.error(errData?.error || "Erro ao salvar");
       }
     } catch (error) {
       console.error("Erro ao salvar presença:", error);
+      toast.error("Erro de conexão");
     } finally {
       setSaving(false);
     }
@@ -155,7 +206,7 @@ export default function PresencaPage() {
       <div className="page-header flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="page-title text-2xl">Chamada de Presença</h1>
-          <p className="page-subtitle">Registre a presença dos alunos na EBD</p>
+          <p className="page-subtitle">{isLeadership ? "Registre a presença da equipe de liderança" : "Registre a presença dos alunos na EBD"}</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <Input
@@ -172,6 +223,12 @@ export default function PresencaPage() {
               {classes.map(c => (
                 <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
               ))}
+              <SelectItem value={LIDERANCA_ID}>
+                <span className="flex items-center gap-1.5">
+                  <Crown className="h-3.5 w-3.5 text-amber-500" />
+                  Liderança
+                </span>
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -211,10 +268,11 @@ export default function PresencaPage() {
 
       {/* Attendance List */}
       <Card className="rounded-3xl shadow-sm border-gray-100 overflow-hidden">
-        <CardHeader className="bg-gray-50/50 border-b border-gray-100">
+        <CardHeader className={cn("border-b border-gray-100", isLeadership ? "bg-amber-50/30" : "bg-gray-50/50")}>
           <CardTitle className="text-lg flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-primary font-bold">{classes.find(c => c.id === selectedClass)?.name}</span>
+              {isLeadership && <Crown className="h-5 w-5 text-amber-500" />}
+              <span className="text-primary font-bold">{isLeadership ? "Equipe de Liderança" : classes.find(c => c.id === selectedClass)?.name}</span>
               <span className="text-gray-300 mx-1">•</span>
               <span className="text-gray-500 font-medium">{new Date(selectedDate + "T12:00:00").toLocaleDateString("pt-BR", { day: '2-digit', month: 'long', year: 'numeric' })}</span>
             </div>
@@ -240,6 +298,9 @@ export default function PresencaPage() {
                   </div>
                   <div>
                     <p className="text-sm font-bold text-gray-900">{s.studentName}</p>
+                    {(s as any).leaderRole && (
+                      <p className="text-[10px] text-primary/70 font-bold uppercase tracking-wider">{(s as any).leaderRole}</p>
+                    )}
                     <div className="flex gap-2 items-center mt-1">
                       {s.status ? (
                         <Badge 
@@ -289,10 +350,10 @@ export default function PresencaPage() {
             {students.length === 0 && !loadingStudents && (
               <div className="p-12 text-center">
                 <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <User className="h-8 w-8 text-gray-200" />
+                  {isLeadership ? <Crown className="h-8 w-8 text-gray-200" /> : <User className="h-8 w-8 text-gray-200" />}
                 </div>
-                <p className="text-gray-500 font-medium">Nenhum aluno ativo nesta classe.</p>
-                <p className="text-xs text-gray-400 mt-1">Cadastre alunos ou altere a classe no topo.</p>
+                <p className="text-gray-500 font-medium">{isLeadership ? "Nenhum líder cadastrado." : "Nenhum aluno ativo nesta classe."}</p>
+                <p className="text-xs text-gray-400 mt-1">{isLeadership ? "Cadastre líderes na aba Liderança." : "Cadastre alunos ou altere a classe no topo."}</p>
               </div>
             )}
           </div>
