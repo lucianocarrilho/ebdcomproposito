@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   Users,
   UserCheck,
@@ -19,6 +20,8 @@ import {
   Bell,
   Info,
   User,
+  Camera,
+  ArrowRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import CalendarioPage from "./calendario/page";
@@ -105,13 +108,24 @@ interface DashboardData {
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [recentPhotos, setRecentPhotos] = useState<any[]>([]);
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const response = await fetch("/api/dashboard");
-        const result = await response.json();
-        setData(result);
+        const [dashRes, photosRes] = await Promise.all([
+          fetch("/api/dashboard"),
+          fetch("/api/photos").catch(() => null),
+        ]);
+        setData(await dashRes.json());
+        if (photosRes?.ok) {
+          const allPhotos = await photosRes.json();
+          // Filtrar apenas álbuns sem classe (Geral) e pegar os 6 mais recentes
+          const general = allPhotos
+            .filter((a: any) => !a.classId)
+            .slice(0, 6);
+          setRecentPhotos(general);
+        }
       } catch (error) {
         console.error("Erro ao carregar dashboard:", error);
       } finally {
@@ -368,6 +382,46 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Fotos da EBD */}
+      {recentPhotos.length > 0 && (
+        <Card className="overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Camera className="h-5 w-5 text-primary" />
+              Fotos da EBD
+            </CardTitle>
+            <Link href="/dashboard/fotos" className="text-xs font-bold text-primary hover:underline flex items-center gap-1">
+              Ver todas <ArrowRight className="h-3 w-3" />
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {recentPhotos.map((album: any) => (
+                <Link key={album.id} href="/dashboard/fotos" className="group">
+                  <div className="relative aspect-square rounded-xl overflow-hidden bg-gray-100 shadow-sm">
+                    {album.coverUrl ? (
+                      <img src={album.coverUrl} alt={album.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Camera className="h-8 w-8 text-gray-200" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <p className="text-white text-[10px] font-bold truncate">{album.title}</p>
+                    </div>
+                    <Badge className="absolute top-1.5 right-1.5 bg-black/50 text-white text-[9px] font-bold backdrop-blur-sm px-1.5 py-0.5">
+                      <Camera className="h-2.5 w-2.5 mr-0.5" /> {album.photoCount}
+                    </Badge>
+                  </div>
+                  <p className="text-[10px] font-medium text-gray-500 mt-1.5 truncate">{album.title}</p>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Avisos Agendados */}
