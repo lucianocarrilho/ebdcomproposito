@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { 
   FileText, Calendar, Users, UserPlus, 
   Check, X, MessageSquare, Download,
-  Printer, Loader2, ArrowRight
+  Printer, Loader2, ArrowRight, BookOpen, BookMarked, DollarSign, Hash
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,10 @@ interface DailySummary {
     totalAbsent: number;
     totalJustified: number;
     totalVisitors: number;
+    totalBiblias: number;
+    totalRevistas: number;
+    totalOfertas: number;
+    totalOutros: number;
     schoolFreq: number;
   };
   classes: {
@@ -35,6 +39,10 @@ interface DailySummary {
     absent: number;
     justified: number;
     visitors: number;
+    biblias: number;
+    revistas: number;
+    ofertas: number;
+    outros: number;
     freq: number;
   }[];
   leaders?: {
@@ -101,16 +109,21 @@ export default function ResumoDiaPage() {
     
     autoTable(doc, {
       startY: 45,
-      head: [['Total Matriculados', 'Presentes', 'Visitantes', 'Faltas', 'Freq %']],
+      head: [['Total Matr.', 'Presentes', 'Visitantes', 'Faltas', 'Bíblias', 'Revistas', 'Ofertas', 'Outros', 'Freq %']],
       body: [[
         data.summary.totalEnrolled,
         data.summary.totalPresent,
         data.summary.totalVisitors,
         data.summary.totalAbsent,
+        data.summary.totalBiblias,
+        data.summary.totalRevistas,
+        `R$ ${data.summary.totalOfertas.toFixed(2)}`,
+        data.summary.totalOutros,
         `${data.summary.schoolFreq}%`
       ]],
       theme: 'grid',
-      headStyles: { fillColor: [30, 58, 95] }
+      headStyles: { fillColor: [30, 58, 95], fontSize: 8 },
+      styles: { fontSize: 8 }
     });
 
     // Detalhe por Classe
@@ -118,17 +131,22 @@ export default function ResumoDiaPage() {
     
     autoTable(doc, {
       startY: (doc as any).lastAutoTable.finalY + 20,
-      head: [['Classe', 'Matric.', 'Pres.', 'Visit.', 'Faltas', 'Freq %']],
+      head: [['Classe', 'Matr.', 'Pres.', 'Visit.', 'Faltas', 'Bíbl.', 'Rev.', 'Ofertas', 'Outros', 'Freq %']],
       body: data.classes.map(c => [
         c.className,
         c.enrolled,
         c.present,
         c.visitors,
         c.absent,
+        c.biblias,
+        c.revistas,
+        `R$ ${c.ofertas.toFixed(2)}`,
+        c.outros,
         `${c.freq}%`
       ]),
       theme: 'striped',
-      headStyles: { fillColor: [71, 85, 105] }
+      headStyles: { fillColor: [71, 85, 105], fontSize: 8 },
+      styles: { fontSize: 8 }
     });
 
     if (data.leaders) {
@@ -264,11 +282,23 @@ export default function ResumoDiaPage() {
                   <TableHeader>
                     <TableRow className="bg-gray-50/30">
                       <TableHead className="font-bold pl-6">Classe</TableHead>
-                      <TableHead className="font-bold text-center">Matriculados</TableHead>
+                      <TableHead className="font-bold text-center">Matrículas</TableHead>
                       <TableHead className="font-bold text-center text-emerald-600 bg-emerald-50/30">P</TableHead>
                       <TableHead className="font-bold text-center text-red-600 bg-red-50/30">F</TableHead>
                       <TableHead className="font-bold text-center text-amber-600 bg-amber-50/30">J</TableHead>
                       <TableHead className="font-bold text-center text-primary bg-primary/5">Vis.</TableHead>
+                      <TableHead className="font-bold text-center text-blue-600 bg-blue-50/30">
+                        <span className="flex items-center justify-center gap-1"><BookOpen className="h-3.5 w-3.5" />Bíbl.</span>
+                      </TableHead>
+                      <TableHead className="font-bold text-center text-purple-600 bg-purple-50/30">
+                        <span className="flex items-center justify-center gap-1"><BookMarked className="h-3.5 w-3.5" />Rev.</span>
+                      </TableHead>
+                      <TableHead className="font-bold text-center text-green-600 bg-green-50/30">
+                        <span className="flex items-center justify-center gap-1"><DollarSign className="h-3.5 w-3.5" />Ofertas</span>
+                      </TableHead>
+                      <TableHead className="font-bold text-center text-orange-600 bg-orange-50/30">
+                        <span className="flex items-center justify-center gap-1"><Hash className="h-3.5 w-3.5" />Outros</span>
+                      </TableHead>
                       <TableHead className="font-bold text-center pr-6">Freq%</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -281,6 +311,10 @@ export default function ResumoDiaPage() {
                         <TableCell className="text-center font-extrabold text-red-700 bg-red-50/10 underline decoration-red-200 underline-offset-4">{c.absent}</TableCell>
                         <TableCell className="text-center font-extrabold text-amber-700 bg-amber-50/10 underline decoration-amber-200 underline-offset-4">{c.justified}</TableCell>
                         <TableCell className="text-center font-extrabold text-primary bg-primary/5 underline decoration-primary/20 underline-offset-4">{c.visitors}</TableCell>
+                        <TableCell className="text-center font-bold text-blue-600 bg-blue-50/10">{c.biblias}</TableCell>
+                        <TableCell className="text-center font-bold text-purple-600 bg-purple-50/10">{c.revistas}</TableCell>
+                        <TableCell className="text-center font-bold text-green-600 bg-green-50/10">R$ {c.ofertas.toFixed(2)}</TableCell>
+                        <TableCell className="text-center font-bold text-orange-600 bg-orange-50/10">{c.outros}</TableCell>
                         <TableCell className="text-center font-bold text-gray-700 pr-6">
                           <Badge variant="secondary" className="font-extrabold">{c.freq}%</Badge>
                         </TableCell>
@@ -299,6 +333,10 @@ export default function ResumoDiaPage() {
                         <TableCell className="text-center font-extrabold text-red-700">{data.leaders.absent}</TableCell>
                         <TableCell className="text-center font-extrabold text-amber-700">{data.leaders.justified}</TableCell>
                         <TableCell className="text-center text-gray-400">-</TableCell>
+                        <TableCell className="text-center text-gray-400">-</TableCell>
+                        <TableCell className="text-center text-gray-400">-</TableCell>
+                        <TableCell className="text-center text-gray-400">-</TableCell>
+                        <TableCell className="text-center text-gray-400">-</TableCell>
                         <TableCell className="text-center font-bold text-indigo-700 pr-6">
                           <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-700 font-extrabold">
                             {data.leaders.freq}%
@@ -315,6 +353,10 @@ export default function ResumoDiaPage() {
                       <TableCell className="text-center text-red-400">{data.summary.totalAbsent}</TableCell>
                       <TableCell className="text-center text-amber-400">{data.summary.totalJustified}</TableCell>
                       <TableCell className="text-center text-blue-300">{data.summary.totalVisitors}</TableCell>
+                      <TableCell className="text-center text-blue-300">{data.summary.totalBiblias}</TableCell>
+                      <TableCell className="text-center text-purple-300">{data.summary.totalRevistas}</TableCell>
+                      <TableCell className="text-center text-green-300">R$ {data.summary.totalOfertas.toFixed(2)}</TableCell>
+                      <TableCell className="text-center text-orange-300">{data.summary.totalOutros}</TableCell>
                       <TableCell className="text-center pr-6">{data.summary.schoolFreq}%</TableCell>
                     </TableRow>
                   </TableBody>

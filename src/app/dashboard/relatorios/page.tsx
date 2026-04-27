@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { BarChart3, Download, FileText, Users, GraduationCap, UserPlus, Cake, Award, Filter, Loader2, Crown } from "lucide-react";
+import { BarChart3, Download, FileText, Users, GraduationCap, UserPlus, Cake, Award, Filter, Loader2, Crown, BookOpen, BookMarked, DollarSign, Hash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -167,18 +167,22 @@ export default function RelatoriosPage() {
       if (selectedReport === "classe" && data.classData) {
         autoTable(doc, {
           startY: 50,
-          head: [['Classe', 'Alunos', 'Presenças', 'Faltas', 'Justif.', 'Frequência %']],
+          head: [['Classe', 'Alunos', 'Presenças', 'Faltas', 'Justif.', 'Bíblias', 'Revistas', 'Ofertas', 'Outros', 'Frequência %']],
           body: data.classData.map((c: any) => [
             c.classe,
             c.matriculados,
             c.matriculados - c.faltas - c.justificadas,
             c.faltas,
             c.justificadas,
+            c.biblias,
+            c.revistas,
+            `R$ ${c.ofertas.toFixed(2)}`,
+            c.outros,
             `${c.mediaFreq}%`
           ]),
           theme: 'striped',
           headStyles: { fillColor: [30, 58, 95] },
-          styles: { fontSize: 9 }
+          styles: { fontSize: 8 }
         });
       } else if (selectedReport === "aluno" && data.students) {
         autoTable(doc, {
@@ -315,7 +319,7 @@ export default function RelatoriosPage() {
                           {c.mediaFreq}% freq.
                         </Badge>
                       </div>
-                      <div className="grid grid-cols-4 gap-2 text-center">
+                      <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 text-center">
                         <div className="space-y-1">
                           <p className="text-lg font-bold text-gray-900">{c.matriculados}</p>
                           <p className="text-[10px] uppercase tracking-tight text-gray-500 font-medium">Alunos</p>
@@ -331,6 +335,22 @@ export default function RelatoriosPage() {
                         <div className="space-y-1 border-l border-gray-200">
                           <p className="text-lg font-bold text-amber-600">{c.justificadas}</p>
                           <p className="text-[10px] uppercase tracking-tight text-gray-500 font-medium">Justif.</p>
+                        </div>
+                        <div className="space-y-1 border-l border-gray-200 hidden sm:block">
+                          <p className="text-lg font-bold text-blue-600">{c.biblias}</p>
+                          <p className="text-[10px] uppercase tracking-tight text-gray-500 font-medium">Bíblias</p>
+                        </div>
+                        <div className="space-y-1 border-l border-gray-200 hidden sm:block">
+                          <p className="text-lg font-bold text-purple-600">{c.revistas}</p>
+                          <p className="text-[10px] uppercase tracking-tight text-gray-500 font-medium">Revistas</p>
+                        </div>
+                        <div className="space-y-1 border-l border-gray-200 hidden sm:block">
+                          <p className="text-lg font-bold text-green-600">R$ {c.ofertas.toFixed(2)}</p>
+                          <p className="text-[10px] uppercase tracking-tight text-gray-500 font-medium">Ofertas</p>
+                        </div>
+                        <div className="space-y-1 border-l border-gray-200 hidden sm:block">
+                          <p className="text-lg font-bold text-orange-600">{c.outros}</p>
+                          <p className="text-[10px] uppercase tracking-tight text-gray-500 font-medium">Outros</p>
                         </div>
                       </div>
                     </div>
@@ -361,6 +381,26 @@ export default function RelatoriosPage() {
               <FileText className="h-5 w-5 text-amber-500 mx-auto mb-2" />
               <p className="text-3xl font-extrabold text-amber-600">{data.summary?.totalJustificadas}</p>
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Justificadas</p>
+            </div>
+            <div className="p-5 rounded-2xl bg-white border border-gray-100 shadow-premium text-center">
+              <BookOpen className="h-5 w-5 text-blue-500 mx-auto mb-2" />
+              <p className="text-3xl font-extrabold text-blue-600">{data.summary?.totalBiblias}</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total de Bíblias</p>
+            </div>
+            <div className="p-5 rounded-2xl bg-white border border-gray-100 shadow-premium text-center">
+              <BookMarked className="h-5 w-5 text-purple-500 mx-auto mb-2" />
+              <p className="text-3xl font-extrabold text-purple-600">{data.summary?.totalRevistas}</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total de Revistas</p>
+            </div>
+            <div className="p-5 rounded-2xl bg-white border border-gray-100 shadow-premium text-center">
+              <DollarSign className="h-5 w-5 text-green-500 mx-auto mb-2" />
+              <p className="text-3xl font-extrabold text-green-600">R$ {data.summary?.totalOfertas.toFixed(2)}</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total de Ofertas</p>
+            </div>
+            <div className="p-5 rounded-2xl bg-white border border-gray-100 shadow-premium text-center">
+              <Hash className="h-5 w-5 text-orange-500 mx-auto mb-2" />
+              <p className="text-3xl font-extrabold text-orange-600">{data.summary?.totalOutros}</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total de Outros</p>
             </div>
           </div>
         </>

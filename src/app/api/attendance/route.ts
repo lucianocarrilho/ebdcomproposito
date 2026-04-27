@@ -49,7 +49,13 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({
-      record: record || null,
+      record: record ? {
+        ...record,
+        biblias: record.biblias || 0,
+        revistas: record.revistas || 0,
+        ofertas: record.ofertas ? Number(record.ofertas) : 0,
+        outros: record.outros || 0,
+      } : null,
       students: attendanceList,
     });
   } catch (error) {
@@ -62,7 +68,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { classId, date, observations, items } = body;
+    const { classId, date, observations, items, biblias, revistas, ofertas, outros } = body;
 
     if (!classId || !date || !items?.length) {
       return NextResponse.json(
@@ -82,9 +88,17 @@ export async function POST(request: NextRequest) {
         date: parsedDate,
         classId,
         observations,
+        biblias: biblias || 0,
+        revistas: revistas || 0,
+        ofertas: ofertas || 0,
+        outros: outros || 0,
       },
       update: {
         observations,
+        biblias: biblias || 0,
+        revistas: revistas || 0,
+        ofertas: ofertas || 0,
+        outros: outros || 0,
       },
     });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Check, X, Clock, UserPlus, CheckCheck, Save, Loader2, AlertTriangle, User, Crown } from "lucide-react";
+import { Check, X, Clock, UserPlus, CheckCheck, Save, Loader2, AlertTriangle, User, Crown, BookOpen, BookMarked, DollarSign, Hash } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +47,10 @@ export default function PresencaPage() {
   const [loading, setLoading] = useState(true);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [observations, setObservations] = useState("");
+  const [biblias, setBiblias] = useState(0);
+  const [revistas, setRevistas] = useState(0);
+  const [ofertas, setOfertas] = useState("");
+  const [outros, setOutros] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -112,6 +116,10 @@ export default function PresencaPage() {
         const data = await res.json();
         setStudents(data.students || []);
         setObservations(data.record?.observations || "");
+        setBiblias(data.record?.biblias || 0);
+        setRevistas(data.record?.revistas || 0);
+        setOfertas(data.record?.ofertas ? String(data.record.ofertas) : "");
+        setOutros(data.record?.outros || 0);
       }
     } catch (error) {
       console.error("Erro ao buscar presença:", error);
@@ -162,6 +170,10 @@ export default function PresencaPage() {
             classId: selectedClass,
             date: selectedDate,
             observations,
+            biblias,
+            revistas,
+            ofertas: ofertas ? parseFloat(ofertas.replace(',', '.')) : 0,
+            outros,
             items: students.map(s => ({
               studentId: s.studentId,
               status: s.status,
@@ -359,6 +371,71 @@ export default function PresencaPage() {
           </div>
 
           <div className="p-6 bg-gray-50/30 space-y-4">
+            {/* Estatísticas da Classe */}
+            {!isLeadership && (
+              <div className="space-y-3">
+                <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">📊 Estatísticas da Classe</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-600">
+                      <BookOpen className="h-3.5 w-3.5 text-blue-500" />
+                      Bíblias
+                    </label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={biblias}
+                      onChange={e => setBiblias(parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                      className="rounded-xl h-11 border-gray-200 text-center font-bold text-lg"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-600">
+                      <BookMarked className="h-3.5 w-3.5 text-purple-500" />
+                      Revistas
+                    </label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={revistas}
+                      onChange={e => setRevistas(parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                      className="rounded-xl h-11 border-gray-200 text-center font-bold text-lg"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-600">
+                      <DollarSign className="h-3.5 w-3.5 text-green-500" />
+                      Ofertas (R$)
+                    </label>
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      value={ofertas}
+                      onChange={e => setOfertas(e.target.value)}
+                      placeholder="0,00"
+                      className="rounded-xl h-11 border-gray-200 text-center font-bold text-lg"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-600">
+                      <Hash className="h-3.5 w-3.5 text-orange-500" />
+                      Outros
+                    </label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={outros}
+                      onChange={e => setOutros(parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                      className="rounded-xl h-11 border-gray-200 text-center font-bold text-lg"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">Observações da aula</Label>
               <Textarea

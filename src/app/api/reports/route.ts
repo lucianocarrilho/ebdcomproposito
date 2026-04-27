@@ -232,7 +232,17 @@ export async function GET(request: NextRequest) {
       let faltas = 0;
       let justificadas = 0;
 
+      let biblias = 0;
+      let revistas = 0;
+      let ofertas = 0;
+      let outros = 0;
+
       c.attendanceRecords.forEach((record) => {
+        biblias += record.biblias;
+        revistas += record.revistas;
+        ofertas += Number(record.ofertas);
+        outros += record.outros;
+
         record.items.forEach((item) => {
           totalItems++;
           if (item.status === AttendanceStatus.PRESENTE) presencas++;
@@ -251,6 +261,10 @@ export async function GET(request: NextRequest) {
         mediaFreq,
         faltas,
         justificadas,
+        biblias,
+        revistas,
+        ofertas,
+        outros,
       };
     });
 
@@ -280,12 +294,21 @@ export async function GET(request: NextRequest) {
 
     const generalFreq = globalTotalItems > 0 ? Math.round((globalPresencas / globalTotalItems) * 100) : 0;
 
+    const totalBiblias = classData.reduce((acc, curr) => acc + curr.biblias, 0);
+    const totalRevistas = classData.reduce((acc, curr) => acc + curr.revistas, 0);
+    const totalOfertas = classData.reduce((acc, curr) => acc + curr.ofertas, 0);
+    const totalOutros = classData.reduce((acc, curr) => acc + curr.outros, 0);
+
     return NextResponse.json({
       summary: {
         totalStudents,
         generalFreq,
         totalFaltas,
         totalJustificadas,
+        totalBiblias,
+        totalRevistas,
+        totalOfertas,
+        totalOutros,
       },
       classData,
     });

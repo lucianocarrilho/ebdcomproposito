@@ -63,6 +63,10 @@ export async function GET(request: NextRequest) {
         absent,
         justified,
         visitors: totalVisitors,
+        biblias: record?.biblias || 0,
+        revistas: record?.revistas || 0,
+        ofertas: record?.ofertas ? Number(record.ofertas) : 0,
+        outros: record?.outros || 0,
         freq: enrolled > 0 ? Math.round((present / enrolled) * 100) : 0
       };
     });
@@ -74,6 +78,10 @@ export async function GET(request: NextRequest) {
       totalAbsent: reportData.reduce((acc, curr) => acc + curr.absent, 0),
       totalJustified: reportData.reduce((acc, curr) => acc + curr.justified, 0),
       totalVisitors: reportData.reduce((acc, curr) => acc + curr.visitors, 0),
+      totalBiblias: reportData.reduce((acc, curr) => acc + curr.biblias, 0),
+      totalRevistas: reportData.reduce((acc, curr) => acc + curr.revistas, 0),
+      totalOfertas: reportData.reduce((acc, curr) => acc + curr.ofertas, 0),
+      totalOutros: reportData.reduce((acc, curr) => acc + curr.outros, 0),
       schoolFreq: 0
     };
 
