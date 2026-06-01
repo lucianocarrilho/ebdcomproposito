@@ -26,6 +26,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import CalendarioPage from "./calendario/page";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -499,17 +500,24 @@ export default function DashboardPage() {
               {data.ranking?.length > 0 ? (
                 data.ranking.map((aluno, index) => {
                   const medals = ["🥇", "🥈", "🥉"];
+                  const medalTexts = ["Ouro", "Prata", "Bronze"];
                   const medalColors = [
-                    "bg-amber-50 text-amber-600 border-amber-200",
-                    "bg-slate-50 text-slate-600 border-slate-200",
-                    "bg-orange-50 text-orange-600 border-orange-200"
+                    "bg-amber-50 text-amber-700 border-amber-200",
+                    "bg-slate-50 text-slate-700 border-slate-200",
+                    "bg-orange-50 text-orange-700 border-orange-200"
                   ];
                   return (
                     <div
                       key={aluno.id}
                       className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-all hover:scale-[1.01]"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* Posição / Medalha */}
+                        <div className="flex flex-col items-center justify-center w-8 h-8 rounded-full bg-white border border-gray-100 shadow-sm flex-shrink-0 text-lg">
+                          {medals[index]}
+                        </div>
+
+                        {/* Avatar */}
                         <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-sm bg-gray-100 flex items-center justify-center text-sm font-bold flex-shrink-0">
                           {aluno.photo ? (
                             <img src={aluno.photo} alt={aluno.name} className="w-full h-full object-cover" />
@@ -517,15 +525,26 @@ export default function DashboardPage() {
                             <span className="text-xs text-gray-400 font-semibold">{aluno.name[0]}</span>
                           )}
                         </div>
-                        <div>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-lg leading-none">{medals[index]}</span>
-                            <p className="text-sm font-bold text-gray-900 leading-tight truncate max-w-[120px]" title={aluno.name}>{aluno.name}</p>
-                          </div>
-                          <p className="text-xs text-gray-500 mt-0.5">{aluno.className}</p>
+
+                        {/* Informações */}
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-gray-900 leading-tight truncate pr-1" title={aluno.name}>
+                            {aluno.name}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                            <span className="truncate max-w-[80px]">{aluno.className}</span>
+                            <span className="text-gray-300">•</span>
+                            <span className={cn(
+                              "font-bold text-[10px] uppercase tracking-wider flex-shrink-0",
+                              index === 0 ? "text-amber-600" : index === 1 ? "text-slate-500" : "text-orange-600"
+                            )}>
+                              {medalTexts[index]}
+                            </span>
+                          </p>
                         </div>
                       </div>
-                      <Badge variant="outline" className={`font-bold text-[10px] ${medalColors[index]} px-2 py-0.5 rounded-full whitespace-nowrap`}>
+
+                      <Badge variant="outline" className={`font-bold text-[10px] ${medalColors[index]} px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0`}>
                         {aluno.presences} {aluno.presences === 1 ? "presença" : "presenças"}
                       </Badge>
                     </div>
