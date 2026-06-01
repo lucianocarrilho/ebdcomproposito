@@ -26,9 +26,17 @@ export async function GET(request: NextRequest) {
       select: { id: true, name: true, role: true, email: true, image: true },
     });
  
-    // 3. Identificar usuários que NÃO existem ainda na tabela Leaders (pelo nome)
+    // 3. Identificar usuários que NÃO existem ainda na tabela Leaders (por nome E por e-mail)
     const existingLeaderNames = new Set(manualLeaders.map(l => l.name.toLowerCase()));
-    const missingUsers = users.filter(u => !existingLeaderNames.has(u.name.toLowerCase()));
+    const existingLeaderEmails = new Set(
+      manualLeaders.map(l => l.email?.toLowerCase()).filter(Boolean)
+    );
+
+    const missingUsers = users.filter(u => {
+      const nameMatch = existingLeaderNames.has(u.name.toLowerCase());
+      const emailMatch = u.email ? existingLeaderEmails.has(u.email.toLowerCase()) : false;
+      return !nameMatch && !emailMatch;
+    });
 
     // 4. Auto-criar registros na tabela Leaders para usuários que faltam
     // Isso garante que a chamada de presença funcione corretamente (foreign key)
