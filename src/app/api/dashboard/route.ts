@@ -221,7 +221,7 @@ export async function GET(request: NextRequest) {
         id: true,
         name: true,
         photo: true,
-        class: { select: { name: true } },
+        class: { select: { id: true, name: true } },
         attendanceItems: {
           where: {
             status: "PRESENTE",
@@ -237,17 +237,32 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const ranking = studentsWithAttendance
-      .map((student) => ({
-        id: student.id,
-        name: student.name.trim(),
-        photo: student.photo,
-        className: student.class?.name || "Sem Classe",
-        presences: student.attendanceItems.length,
-      }))
-      .filter((s) => s.presences > 0)
-      .sort((a, b) => b.presences - a.presences)
-      .slice(0, 3);
+    const ranking = (() => {
+      const studentsMapped = studentsWithAttendance
+        .map((student) => ({
+          id: student.id,
+          name: student.name.trim(),
+          photo: student.photo,
+          classId: student.class?.id || "sem-classe",
+          className: student.class?.name || "Sem Classe",
+          presences: student.attendanceItems.length,
+        }))
+        .filter((s) => s.presences > 0);
+
+      // Agrupar por classe e pegar apenas o aluno com mais presenças de cada classe
+      const classChampionsMap = new Map<string, typeof studentsMapped[0]>();
+      
+      for (const student of studentsMapped) {
+        const existingChampion = classChampionsMap.get(student.classId);
+        if (!existingChampion || student.presences > existingChampion.presences) {
+          classChampionsMap.set(student.classId, student);
+        }
+      }
+
+      return Array.from(classChampionsMap.values())
+        .sort((a, b) => b.presences - a.presences)
+        .slice(0, 3);
+    })();
 
     const highlights = await prisma.quarterHighlight.findMany({
       where: highlightWhere,
