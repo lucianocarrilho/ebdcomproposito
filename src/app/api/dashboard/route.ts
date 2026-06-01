@@ -1,16 +1,24 @@
 import { prisma } from "@/lib/prisma";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { AttendanceStatus } from "@prisma/client";
 import { auth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 // GET - Dashboard statistics
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    let selectedQuarter = searchParams.get("quarter");
+
     const session = await auth();
     if (!session) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+
+    if (!selectedQuarter) {
+      const settings = await prisma.settings.findFirst();
+      selectedQuarter = settings?.currentQuarter || "2026-Q1";
     }
 
     const userRole = (session.user as any).role;
@@ -186,15 +194,60 @@ export async function GET() {
       });
     }
 
-    // Settings
-    const settings = await prisma.settings.findFirst();
-    const quarter = settings?.currentQuarter || "2026-Q1";
-
     // Highlights
-    const highlightWhere: any = { quarter };
+    const highlightWhere: any = { quarter: selectedQuarter };
     if (allowedClassIds) {
       highlightWhere.classId = { in: allowedClassIds };
     }
+
+    // Calcular o ranqueamento por frequência do trimestre selecionado
+    const getQuarterDateRange = (quarterStr: string) => {
+      const [yearStr, qStr] = quarterStr.split("-");
+      const year = parseInt(yearStr);
+      const q = parseInt(qStr.replace("Q", ""));
+      
+      const startMonth = (q - 1) * 3;
+      const startDate = new Date(Date.UTC(year, startMonth, 1, 0, 0, 0));
+      const endDate = new Date(Date.UTC(year, startMonth + 3, 0, 23, 59, 59, 999));
+      
+      return { startDate, endDate };
+    };
+
+    const { startDate, endDate } = getQuarterDateRange(selectedQuarter);
+
+    const studentsWithAttendance = await prisma.student.findMany({
+      where: studentWhere,
+      select: {
+        id: true,
+        name: true,
+        photo: true,
+        class: { select: { name: true } },
+        attendanceItems: {
+          where: {
+            status: "PRESENTE",
+            record: {
+              date: {
+                gte: startDate,
+                lte: endDate,
+              },
+            },
+          },
+          select: { id: true },
+        },
+      },
+    });
+
+    const ranking = studentsWithAttendance
+      .map((student) => ({
+        id: student.id,
+        name: student.name.trim(),
+        photo: student.photo,
+        className: student.class?.name || "Sem Classe",
+        presences: student.attendanceItems.length,
+      }))
+      .filter((s) => s.presences > 0)
+      .sort((a, b) => b.presences - a.presences)
+      .slice(0, 3);
 
     const highlights = await prisma.quarterHighlight.findMany({
       where: highlightWhere,
@@ -303,6 +356,8 @@ export async function GET() {
             foto: missionario.photo || missionario.student.photo 
           }
         : null,
+      ranking,
+      currentQuarter: selectedQuarter,
     });
   } catch (error) {
     console.error("Erro no dashboard:", error);

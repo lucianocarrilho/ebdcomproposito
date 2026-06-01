@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -26,6 +26,14 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import CalendarioPage from "./calendario/page";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import {
   BarChart,
   Bar,
@@ -103,21 +111,63 @@ interface DashboardData {
     motivo: string;
     foto?: string;
   };
+  ranking: Array<{
+    id: string;
+    name: string;
+    photo?: string;
+    className: string;
+    presences: number;
+  }>;
+  currentQuarter: string;
+}
+
+// Gerar lista de trimestres
+function getQuarters() {
+  const year = new Date().getFullYear();
+  const quarters = [];
+  for (let y = year - 1; y <= year + 1; y++) {
+    for (let q = 1; q <= 4; q++) {
+      quarters.push({
+        value: `${y}-Q${q}`,
+        label: `${q}º Trimestre ${y}`,
+      });
+    }
+  }
+  return quarters;
 }
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [recentPhotos, setRecentPhotos] = useState<any[]>([]);
+  const [selectedQuarter, setSelectedQuarter] = useState<string>("");
+  
+  const loadedQuarterRef = useRef<string>("");
+  const quarters = getQuarters();
 
   useEffect(() => {
     async function fetchData() {
+      // Evitar buscas redundantes se o trimestre selecionado for o mesmo já carregado
+      if (selectedQuarter && selectedQuarter === loadedQuarterRef.current) {
+        return;
+      }
+      
+      setLoading(true);
       try {
+        const url = selectedQuarter ? `/api/dashboard?quarter=${selectedQuarter}` : "/api/dashboard";
         const [dashRes, photosRes] = await Promise.all([
-          fetch("/api/dashboard"),
-          fetch("/api/photos").catch(() => null),
+          fetch(url),
+          recentPhotos.length === 0 ? fetch("/api/photos").catch(() => null) : Promise.resolve(null),
         ]);
-        setData(await dashRes.json());
+        
+        const dashData = await dashRes.json();
+        setData(dashData);
+        loadedQuarterRef.current = dashData.currentQuarter;
+        
+        if (dashData?.currentQuarter && selectedQuarter !== dashData.currentQuarter) {
+          setSelectedQuarter(dashData.currentQuarter);
+        }
+
         if (photosRes?.ok) {
           const allPhotos = await photosRes.json();
           // Filtrar apenas álbuns sem classe (Geral) e pegar os 6 mais recentes
@@ -133,7 +183,7 @@ export default function DashboardPage() {
       }
     }
     fetchData();
-  }, []);
+  }, [selectedQuarter]);
 
   if (loading) {
     return (
@@ -145,11 +195,8 @@ export default function DashboardPage() {
   }
 
   if (!data) return null;
- 
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
-  const quarter = Math.floor(currentMonth / 3) + 1;
-  const quarterName = `${quarter}º Trimestre ${currentYear}`;
+
+  const selectedQuarterLabel = quarters.find(q => q.value === selectedQuarter)?.label || selectedQuarter;
  
   const stats = [
     { label: "Total de Alunos", value: data.stats.totalStudents, icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
@@ -165,11 +212,26 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Page Header */}
-      <div className="page-header">
-        <h1 className="page-title">Dashboard</h1>
-        <p className="page-subtitle">
-          Visão geral da Escola Bíblica Dominical • {quarterName} (v1.2)
-        </p>
+      <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="page-title text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="page-subtitle text-gray-500">
+            Visão geral da Escola Bíblica Dominical • {selectedQuarterLabel}
+          </p>
+        </div>
+        <div className="flex items-center gap-3 bg-white p-2 rounded-2xl border shadow-sm">
+          <Label htmlFor="quarterSelect" className="text-xs font-bold text-gray-400 pl-2">FILTRAR POR TRIMESTRE:</Label>
+          <Select value={selectedQuarter} onValueChange={setSelectedQuarter}>
+            <SelectTrigger id="quarterSelect" className="border-none bg-transparent font-bold text-primary focus:ring-0 w-44">
+              <SelectValue placeholder="Selecione o Trimestre" />
+            </SelectTrigger>
+            <SelectContent>
+              {quarters.map(q => (
+                <SelectItem key={q.value} value={q.value}>{q.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Stats Grid */}
@@ -423,7 +485,62 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Ranqueamento de Frequência do Trimestre */}
+        <Card className="overflow-hidden border border-gray-100 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base font-bold flex items-center gap-2">
+              <Award className="h-5 w-5 text-amber-500" />
+              Ranqueamento do Trimestre
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {data.ranking?.length > 0 ? (
+                data.ranking.map((aluno, index) => {
+                  const medals = ["🥇", "🥈", "🥉"];
+                  const medalColors = [
+                    "bg-amber-50 text-amber-600 border-amber-200",
+                    "bg-slate-50 text-slate-600 border-slate-200",
+                    "bg-orange-50 text-orange-600 border-orange-200"
+                  ];
+                  return (
+                    <div
+                      key={aluno.id}
+                      className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-all hover:scale-[1.01]"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-sm bg-gray-100 flex items-center justify-center text-sm font-bold flex-shrink-0">
+                          {aluno.photo ? (
+                            <img src={aluno.photo} alt={aluno.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-xs text-gray-400 font-semibold">{aluno.name[0]}</span>
+                          )}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-lg leading-none">{medals[index]}</span>
+                            <p className="text-sm font-bold text-gray-900 leading-tight truncate max-w-[120px]" title={aluno.name}>{aluno.name}</p>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-0.5">{aluno.className}</p>
+                        </div>
+                      </div>
+                      <Badge variant="outline" className={`font-bold text-[10px] ${medalColors[index]} px-2 py-0.5 rounded-full whitespace-nowrap`}>
+                        {aluno.presences} {aluno.presences === 1 ? "presença" : "presenças"}
+                      </Badge>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8 text-gray-400">
+                  <Award className="h-8 w-8 mb-2 opacity-20" />
+                  <p className="text-sm italic">Sem registros neste trimestre</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Avisos Agendados */}
         <Card>
           <CardHeader>
