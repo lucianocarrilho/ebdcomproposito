@@ -21,7 +21,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       onBeforeGenerateToken: async (pathname, clientPayload) => {
         // Retorna a autorização e as opções do token
         return {
-          // Deixar vazio ou omitir allowedContentTypes permite qualquer tipo de arquivo (PDF, ZIP, DOCX, etc)
+          addRandomSuffix: true,
           tokenPayload: JSON.stringify({
             userId: (session.user as any).id,
           }),
