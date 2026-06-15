@@ -62,6 +62,7 @@ model Class {
   quarterHighlights QuarterHighlight[]
   users         User[]    @relation("UserClass")
   photoAlbums   PhotoAlbum[]
+  materials     Material[]
   
   @@map("classes")
 }
@@ -338,3 +339,21 @@ model PhotoItem {
 
   @@map("photo_items")
 }
+
+model Material {
+  id          String   @id @default(cuid())
+  title       String
+  description String?  @db.Text
+  fileUrl     String
+  fileName    String
+  fileSize    Int
+  category    String   @default("Outros") // Revista, Lição, Livro, Outros
+  classId     String?
+  class       Class?   @relation(fields: [classId], references: [id])
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("materials")
+}
+

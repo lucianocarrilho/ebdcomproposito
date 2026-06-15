@@ -25,6 +25,7 @@ import {
   Crown,
   Fingerprint,
   Camera,
+  FileDown,
 } from "lucide-react";
 
 import { useSession } from "next-auth/react";
@@ -37,6 +38,7 @@ const navigation = [
   { name: "Presença", href: "/dashboard/presenca", icon: ClipboardCheck, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
   { name: "Justificativas", href: "/dashboard/justificativas", icon: FileText, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
   { name: "Lições", href: "/dashboard/licoes", icon: BookOpen, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
+  { name: "Biblioteca PDF", href: "/dashboard/biblioteca", icon: FileDown, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
   { name: "Visitantes", href: "/dashboard/visitantes", icon: UserPlus, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
   { name: "Destaques", href: "/dashboard/destaques", icon: Star, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
   { name: "Fotos", href: "/dashboard/fotos", icon: Camera, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
