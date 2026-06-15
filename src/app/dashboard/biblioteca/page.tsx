@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
+import { upload } from "@vercel/blob/client";
 
 interface ClassItem {
   id: string;
@@ -112,7 +113,7 @@ export default function BibliotecaPage() {
     }
   };
 
-  // Upload do arquivo para a API do Vercel Blob / Local
+  // Upload do arquivo diretamente do cliente para o Vercel Blob (evita limite de 4.5MB da Vercel)
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -126,29 +127,20 @@ export default function BibliotecaPage() {
 
     setUploadProgress(true);
     try {
-      const res = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": file.type || "application/octet-stream",
-        },
-        body: file,
+      const blob = await upload(file.name, file, {
+        access: "public",
+        handleUploadUrl: "/api/materials/upload",
       });
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(errorText || "Falha no envio");
-      }
-
-      const data = await res.json();
-      if (data.url) {
+      if (blob && blob.url) {
         setUploadedFile({
-          url: data.url,
+          url: blob.url,
           name: file.name,
           size: file.size,
         });
         toast.success("Arquivo carregado com sucesso!");
       } else {
-        throw new Error("URL não retornada pelo servidor");
+        throw new Error("Não foi possível obter a URL do arquivo");
       }
     } catch (err: any) {
       console.error("Erro no upload:", err);
