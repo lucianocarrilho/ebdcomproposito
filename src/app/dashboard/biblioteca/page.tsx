@@ -117,10 +117,10 @@ export default function BibliotecaPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Limite de 10MB
-    const maxSize = 10 * 1024 * 1024;
+    // Limite de 50MB
+    const maxSize = 50 * 1024 * 1024;
     if (file.size > maxSize) {
-      toast.error(`O arquivo é muito grande (${(file.size / 1024 / 1024).toFixed(2)}MB). Limite máximo de 10MB.`);
+      toast.error(`O arquivo é muito grande (${(file.size / 1024 / 1024).toFixed(2)}MB). Limite máximo de 50MB.`);
       return;
     }
 
@@ -527,7 +527,7 @@ export default function BibliotecaPage() {
 
             {/* Upload do Arquivo */}
             <div className="space-y-2 pt-2">
-              <Label className="font-bold">Arquivo (PDF, DOCX, ZIP, etc. Max 10MB)</Label>
+              <Label className="font-bold">Arquivo (PDF, DOCX, ZIP, etc. Max 50MB)</Label>
               
               {uploadedFile ? (
                 <div className="border border-green-200 bg-green-50/50 p-4 rounded-xl flex items-center justify-between gap-3 animate-fade-in">
@@ -560,7 +560,7 @@ export default function BibliotecaPage() {
                       <FileDown className="h-8 w-8 text-gray-400" />
                       <div className="space-y-1">
                         <p className="text-xs text-gray-500 font-bold">Clique para fazer upload</p>
-                        <p className="text-[10px] text-gray-400">PDF, Word, Excel, Powerpoint ou ZIP. Máx 10MB</p>
+                        <p className="text-[10px] text-gray-400">PDF, Word, Excel, Powerpoint ou ZIP. Máx 50MB</p>
                       </div>
                       <Input
                         type="file"
