@@ -6,12 +6,6 @@ export async function POST(request: Request): Promise<NextResponse> {
   const body = (await request.json()) as HandleUploadBody;
 
   try {
-    const session = await auth();
-    // Restringir a geração de tokens de upload apenas para administradores
-    if (!session || (session.user as any)?.role !== "ADMIN") {
-      return NextResponse.json({ error: "Apenas administradores podem fazer upload" }, { status: 403 });
-    }
-
     const blobToken = "vercel_blob_rw_12Z3rqWooPyc8G9Q_QvILDyvVrVA0gqpZJAmg0V6eR2qg8A";
 
     const jsonResponse = await handleUpload({
@@ -19,6 +13,12 @@ export async function POST(request: Request): Promise<NextResponse> {
       request,
       token: blobToken,
       onBeforeGenerateToken: async (pathname, clientPayload) => {
+        const session = await auth();
+        // Restringir a geração de tokens de upload apenas para administradores
+        if (!session || (session.user as any)?.role !== "ADMIN") {
+          throw new Error("Apenas administradores podem fazer upload");
+        }
+        
         // Retorna a autorização e as opções do token
         return {
           addRandomSuffix: true,
