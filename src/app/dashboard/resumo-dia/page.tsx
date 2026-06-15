@@ -4,7 +4,8 @@ import React, { useState, useEffect } from "react";
 import { 
   FileText, Calendar, Users, UserPlus, 
   Check, X, MessageSquare, Download,
-  Printer, Loader2, ArrowRight, BookOpen, BookMarked, DollarSign, Hash
+  Printer, Loader2, ArrowRight, BookOpen, BookMarked, DollarSign, Hash,
+  Trophy, Award
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,6 +82,26 @@ export default function ResumoDiaPage() {
     }
   }
 
+  const getWinners = (key: "freq" | "biblias" | "visitors" | "ofertas") => {
+    if (!data || !data.classes || data.classes.length === 0) return null;
+    
+    // For frequency, only consider classes with enrolled students > 0
+    const list = key === "freq" 
+      ? data.classes.filter(c => c.enrolled > 0)
+      : data.classes;
+      
+    if (list.length === 0) return null;
+    
+    const maxVal = Math.max(...list.map(c => c[key]));
+    if (maxVal <= 0) return null; // Only count positive values
+    
+    const winners = list.filter(c => c[key] === maxVal);
+    return {
+      names: winners.map(c => c.className).join(", "),
+      value: maxVal
+    };
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -123,6 +144,47 @@ export default function ResumoDiaPage() {
       ]],
       theme: 'grid',
       headStyles: { fillColor: [30, 58, 95], fontSize: 8 },
+      styles: { fontSize: 8 }
+    });
+
+    // Destaques do Dia (1º Lugar)
+    doc.setFontSize(14);
+    doc.setTextColor(30, 58, 95);
+    const highlightsY = (doc as any).lastAutoTable.finalY + 15;
+    doc.text("Destaques do Dia (1º Lugar)", 15, highlightsY);
+
+    const freqWinner = getWinners("freq");
+    const bibliasWinner = getWinners("biblias");
+    const visitorsWinner = getWinners("visitors");
+    const ofertasWinner = getWinners("ofertas");
+
+    autoTable(doc, {
+      startY: highlightsY + 5,
+      head: [['Categoria', 'Classe(s) Vencedora(s)', 'Resultado']],
+      body: [
+        [
+          '1º Lugar - Frequência',
+          freqWinner ? freqWinner.names : '—',
+          freqWinner ? `${freqWinner.value}%` : '0%'
+        ],
+        [
+          '1º Lugar - Bíblias',
+          bibliasWinner ? bibliasWinner.names : '—',
+          bibliasWinner ? `${bibliasWinner.value} ${bibliasWinner.value === 1 ? "Bíblia" : "Bíblias"}` : '—'
+        ],
+        [
+          '1º Lugar - Visitantes',
+          visitorsWinner ? visitorsWinner.names : '—',
+          visitorsWinner ? `${visitorsWinner.value} ${visitorsWinner.value === 1 ? "Visitante" : "Visitantes"}` : '—'
+        ],
+        [
+          '1º Lugar - Ofertas',
+          ofertasWinner ? ofertasWinner.names : '—',
+          ofertasWinner ? `R$ ${ofertasWinner.value.toFixed(2)}` : '—'
+        ]
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [194, 120, 3], fontSize: 8 }, // Golden color
       styles: { fontSize: 8 }
     });
 
@@ -265,6 +327,104 @@ export default function ResumoDiaPage() {
                 </div>
               </CardContent>
             </Card>
+          </div>
+
+          {/* Destaques do Dia (1º Lugar) */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-amber-500 animate-pulse" />
+              Destaques do Dia (1º Lugar por Categoria)
+            </h2>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Card Frequência */}
+              {(() => {
+                const w = getWinners("freq");
+                return (
+                  <Card className="border border-amber-100 bg-gradient-to-br from-amber-50/20 to-white hover:shadow-md transition-all duration-300 transform hover:-translate-y-0.5">
+                    <CardContent className="p-4 flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 flex-shrink-0">
+                        <Award className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] text-amber-600 font-bold uppercase tracking-wider">Frequência</p>
+                        <p className="text-sm font-extrabold text-gray-900 truncate" title={w ? w.names : "Nenhuma classe"}>
+                          {w ? w.names : "—"}
+                        </p>
+                        <p className="text-xs text-gray-500 font-semibold mt-0.5">{w ? `${w.value}%` : "—"}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+
+              {/* Card Bíblias */}
+              {(() => {
+                const w = getWinners("biblias");
+                return (
+                  <Card className="border border-blue-100 bg-gradient-to-br from-blue-50/20 to-white hover:shadow-md transition-all duration-300 transform hover:-translate-y-0.5">
+                    <CardContent className="p-4 flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 flex-shrink-0">
+                        <BookOpen className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider">Bíblias</p>
+                        <p className="text-sm font-extrabold text-gray-900 truncate" title={w ? w.names : "Nenhuma classe"}>
+                          {w ? w.names : "—"}
+                        </p>
+                        <p className="text-xs text-gray-500 font-semibold mt-0.5">
+                          {w ? `${w.value} ${w.value === 1 ? "Bíblia" : "Bíblias"}` : "—"}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+
+              {/* Card Visitantes */}
+              {(() => {
+                const w = getWinners("visitors");
+                return (
+                  <Card className="border border-orange-100 bg-gradient-to-br from-orange-50/20 to-white hover:shadow-md transition-all duration-300 transform hover:-translate-y-0.5">
+                    <CardContent className="p-4 flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600 flex-shrink-0">
+                        <UserPlus className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] text-orange-600 font-bold uppercase tracking-wider">Visitantes</p>
+                        <p className="text-sm font-extrabold text-gray-900 truncate" title={w ? w.names : "Nenhuma classe"}>
+                          {w ? w.names : "—"}
+                        </p>
+                        <p className="text-xs text-gray-500 font-semibold mt-0.5">
+                          {w ? `${w.value} ${w.value === 1 ? "Visitante" : "Visitantes"}` : "—"}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+
+              {/* Card Ofertas */}
+              {(() => {
+                const w = getWinners("ofertas");
+                return (
+                  <Card className="border border-emerald-100 bg-gradient-to-br from-emerald-50/20 to-white hover:shadow-md transition-all duration-300 transform hover:-translate-y-0.5">
+                    <CardContent className="p-4 flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 flex-shrink-0">
+                        <DollarSign className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Ofertas</p>
+                        <p className="text-sm font-extrabold text-gray-900 truncate" title={w ? w.names : "Nenhuma classe"}>
+                          {w ? w.names : "—"}
+                        </p>
+                        <p className="text-xs text-gray-500 font-semibold mt-0.5">{w ? `R$ ${w.value.toFixed(2)}` : "—"}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+            </div>
           </div>
 
           {/* Tabela Detalhada por Classe */}
