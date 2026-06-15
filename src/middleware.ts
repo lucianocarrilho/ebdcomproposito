@@ -21,8 +21,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  // Protect API routes (except auth)
-  if (pathname.startsWith("/api") && !hasToken) {
+  // Protect API routes (except auth and materials upload callback)
+  if (pathname.startsWith("/api") && !pathname.startsWith("/api/materials/upload") && !hasToken) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
