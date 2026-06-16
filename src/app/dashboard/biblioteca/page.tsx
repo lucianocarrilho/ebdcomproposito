@@ -112,7 +112,7 @@ export default function BibliotecaPage() {
     }
   };
 
-  // Upload do arquivo via FormData para o servidor (que envia ao Vercel Blob)
+  // Upload do arquivo diretamente ao Vercel Blob (client-side upload via dynamic import)
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -126,24 +126,17 @@ export default function BibliotecaPage() {
 
     setUploadProgress(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      // Dynamic import para evitar problemas de bundling no carregamento da página
+      const { upload } = await import("@vercel/blob/client");
 
-      const res = await fetch("/api/materials/upload", {
-        method: "POST",
-        body: formData,
+      const blob = await upload(file.name, file, {
+        access: "public",
+        handleUploadUrl: "/api/materials/upload",
       });
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: "Erro desconhecido" }));
-        throw new Error(errorData.error || `Erro HTTP ${res.status}`);
-      }
-
-      const blobData = await res.json();
-
-      if (blobData && blobData.url) {
+      if (blob && blob.url) {
         setUploadedFile({
-          url: blobData.url,
+          url: blob.url,
           name: file.name,
           size: file.size,
         });
@@ -153,7 +146,8 @@ export default function BibliotecaPage() {
       }
     } catch (err: any) {
       console.error("Erro no upload:", err);
-      toast.error(`Erro ao enviar arquivo: ${err.message || "Erro desconhecido"}`);
+      const errorMsg = err?.message || "Erro desconhecido";
+      toast.error(`Erro ao enviar arquivo: ${errorMsg}`);
     } finally {
       setUploadProgress(false);
     }
