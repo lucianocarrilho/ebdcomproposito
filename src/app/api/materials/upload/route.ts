@@ -1,42 +1,65 @@
-import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
+import { put } from "@vercel/blob";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 
+// Token do Vercel Blob
+const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || "vercel_blob_rw_12Z3rqWooPyc8G9Q_QvILDyvVrVA0gqpZJAmg0V6eR2qg8A";
+
+// Permitir body maior para upload de arquivos (até 50MB)
+export const runtime = "nodejs";
+
 export async function POST(request: Request): Promise<NextResponse> {
-  const body = (await request.json()) as HandleUploadBody;
-
   try {
-    const blobToken = "vercel_blob_rw_12Z3rqWooPyc8G9Q_QvILDyvVrVA0gqpZJAmg0V6eR2qg8A";
+    // 1. Verificar autenticação
+    const session = await auth();
+    if (!session || (session.user as any)?.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Apenas administradores podem fazer upload de arquivos" },
+        { status: 403 }
+      );
+    }
 
-    const jsonResponse = await handleUpload({
-      body,
-      request,
-      token: blobToken,
-      onBeforeGenerateToken: async (pathname, clientPayload) => {
-        const session = await auth();
-        // Restringir a geração de tokens de upload apenas para administradores
-        if (!session || (session.user as any)?.role !== "ADMIN") {
-          throw new Error("Apenas administradores podem fazer upload");
-        }
-        
-        // Retorna a autorização e as opções do token
-        return {
-          addRandomSuffix: true,
-          tokenPayload: JSON.stringify({
-            userId: (session.user as any).id,
-          }),
-        };
-      },
-      onUploadCompleted: async ({ blob, tokenPayload }) => {
-        // Callback executado pela Vercel após o término do upload.
-        // Como atualizamos o banco de dados diretamente no formulário do cliente, não precisamos fazer nada aqui.
-        console.log("Upload concluído no Vercel Blob:", blob.url);
-      },
+    // 2. Ler FormData do request
+    const formData = await request.formData();
+    const file = formData.get("file") as File | null;
+
+    if (!file) {
+      return NextResponse.json(
+        { error: "Nenhum arquivo encontrado no upload" },
+        { status: 400 }
+      );
+    }
+
+    // 3. Validar tamanho (50MB máximo)
+    const maxSize = 50 * 1024 * 1024;
+    if (file.size > maxSize) {
+      return NextResponse.json(
+        { error: `Arquivo muito grande (${(file.size / 1024 / 1024).toFixed(2)}MB). Limite: 50MB` },
+        { status: 400 }
+      );
+    }
+
+    // 4. Upload para Vercel Blob
+    const blob = await put(file.name, file, {
+      access: "public",
+      token: BLOB_TOKEN,
+      addRandomSuffix: true,
     });
 
-    return NextResponse.json(jsonResponse);
+    console.log("[Upload Route] Upload concluído com sucesso:", blob.url);
+
+    // 5. Retornar dados do blob
+    return NextResponse.json({
+      url: blob.url,
+      downloadUrl: blob.downloadUrl,
+      pathname: blob.pathname,
+      contentType: blob.contentType,
+    });
   } catch (error: any) {
-    console.error("[API Materials Upload] Erro ao gerar token:", error);
-    return NextResponse.json({ error: error.message || "Erro no upload" }, { status: 400 });
+    console.error("[Upload Route] Erro no upload:", error);
+    return NextResponse.json(
+      { error: error.message || "Erro desconhecido no upload" },
+      { status: 500 }
+    );
   }
 }

@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { upload } from "@vercel/blob/client";
 
 interface ClassItem {
   id: string;
@@ -113,7 +112,7 @@ export default function BibliotecaPage() {
     }
   };
 
-  // Upload do arquivo diretamente do cliente para o Vercel Blob (evita limite de 4.5MB da Vercel)
+  // Upload do arquivo via FormData para o servidor (que envia ao Vercel Blob)
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -127,14 +126,24 @@ export default function BibliotecaPage() {
 
     setUploadProgress(true);
     try {
-      const blob = await upload(file.name, file, {
-        access: "public",
-        handleUploadUrl: "/api/materials/upload",
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/materials/upload", {
+        method: "POST",
+        body: formData,
       });
 
-      if (blob && blob.url) {
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Erro desconhecido" }));
+        throw new Error(errorData.error || `Erro HTTP ${res.status}`);
+      }
+
+      const blobData = await res.json();
+
+      if (blobData && blobData.url) {
         setUploadedFile({
-          url: blob.url,
+          url: blobData.url,
           name: file.name,
           size: file.size,
         });
