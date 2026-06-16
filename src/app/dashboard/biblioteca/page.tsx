@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   FileDown, Loader2, Plus, Trash2, Search, Filter, 
-  BookOpen, Book, FileText, File, FolderArchive, ArrowUpRight, X
+  BookOpen, Book, FileText, File, FolderArchive, ArrowUpRight, X, Link, Upload, ExternalLink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +63,10 @@ export default function BibliotecaPage() {
   // Estado de Exclusão
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Modo de upload: "file" (upload direto) ou "link" (link externo do Google Drive)
+  const [uploadMode, setUploadMode] = useState<"file" | "link">("link");
+  const [externalUrl, setExternalUrl] = useState("");
 
   // Dados do formulário de novo material
   const [formData, setFormData] = useState({
@@ -158,6 +162,23 @@ export default function BibliotecaPage() {
     }
   };
 
+  // Helpers para identificar links externos
+  const isExternalLink = (url: string) => {
+    return url.includes("drive.google.com") || url.includes("docs.google.com") || url.includes("dropbox.com") || url.includes("onedrive.live.com") || url.startsWith("http") && !url.includes("blob.vercel-storage.com");
+  };
+
+  const isGoogleDriveLink = (url: string) => {
+    return url.includes("drive.google.com") || url.includes("docs.google.com");
+  };
+
+  // Resetar formulário ao fechar dialog
+  const resetForm = () => {
+    setFormData({ title: "", description: "", category: "Revista", classId: "none" });
+    setUploadedFile(null);
+    setExternalUrl("");
+    setUploadMode("link");
+  };
+
   // Salvar registro do material no banco de dados
   const handleSaveMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,19 +186,34 @@ export default function BibliotecaPage() {
       toast.error("O título é obrigatório");
       return;
     }
-    if (!uploadedFile) {
+
+    // Validar conforme modo
+    if (uploadMode === "file" && !uploadedFile) {
       toast.error("Você precisa selecionar e fazer o upload de um arquivo");
       return;
+    }
+    if (uploadMode === "link" && !externalUrl.trim()) {
+      toast.error("Você precisa informar o link do material");
+      return;
+    }
+    if (uploadMode === "link") {
+      try {
+        new URL(externalUrl.trim());
+      } catch {
+        toast.error("O link informado não é uma URL válida");
+        return;
+      }
     }
 
     setIsSubmitting(true);
     try {
+      const isLink = uploadMode === "link";
       const payload = {
         title: formData.title,
         description: formData.description || null,
-        fileUrl: uploadedFile.url,
-        fileName: uploadedFile.name,
-        fileSize: uploadedFile.size,
+        fileUrl: isLink ? externalUrl.trim() : uploadedFile!.url,
+        fileName: isLink ? formData.title : uploadedFile!.name,
+        fileSize: isLink ? 0 : uploadedFile!.size,
         category: formData.category,
         classId: formData.classId === "none" ? null : formData.classId,
       };
@@ -193,9 +229,7 @@ export default function BibliotecaPage() {
       if (res.ok) {
         toast.success("Material adicionado com sucesso!");
         setIsUploadOpen(false);
-        // Reset formulário
-        setFormData({ title: "", description: "", category: "Revista", classId: "none" });
-        setUploadedFile(null);
+        resetForm();
         fetchMaterials();
       } else {
         const data = await res.json();
@@ -368,14 +402,36 @@ export default function BibliotecaPage() {
         </div>
       ) : filteredMaterials.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredMaterials.map((material) => (
+          {filteredMaterials.map((material) => {
+            const isDriveLink = isGoogleDriveLink(material.fileUrl);
+            const isExternal = isExternalLink(material.fileUrl);
+            return (
             <Card key={material.id} className="border border-gray-100 shadow-premium bg-white flex flex-col justify-between overflow-hidden relative group hover:shadow-md transition-all duration-300">
               <div className="p-6 space-y-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="h-12 w-12 rounded-xl bg-gray-50 border flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
-                    {getCategoryIcon(material.category)}
+                  <div className={`h-12 w-12 rounded-xl border flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform ${isDriveLink ? 'bg-blue-50 border-blue-200' : 'bg-gray-50'}`}>
+                    {isDriveLink ? (
+                      <svg className="h-6 w-6" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
+                        <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+                        <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-20.4 35.3c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00ac47"/>
+                        <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l11.902 23.8z" fill="#ea4335"/>
+                        <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+                        <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
+                        <path d="m73.4 26.5-10.1-17.5c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 23.8h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
+                      </svg>
+                    ) : getCategoryIcon(material.category)}
                   </div>
                   <div className="flex flex-wrap gap-1.5 justify-end">
+                    {isDriveLink && (
+                      <Badge variant="outline" className="font-semibold border border-blue-200 bg-blue-50 text-blue-700">
+                        Google Drive
+                      </Badge>
+                    )}
+                    {isExternal && !isDriveLink && (
+                      <Badge variant="outline" className="font-semibold border border-indigo-200 bg-indigo-50 text-indigo-700">
+                        Link Externo
+                      </Badge>
+                    )}
                     <Badge variant="outline" className={`font-semibold border ${getCategoryBadgeColor(material.category)}`}>
                       {material.category}
                     </Badge>
@@ -397,7 +453,11 @@ export default function BibliotecaPage() {
                 </div>
 
                 <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-400 font-medium">
-                  <span>Tam: {formatBytes(material.fileSize)}</span>
+                  {material.fileSize > 0 ? (
+                    <span>Tam: {formatBytes(material.fileSize)}</span>
+                  ) : (
+                    <span>{isDriveLink ? "Google Drive" : isExternal ? "Link externo" : "—"}</span>
+                  )}
                   <span>Enviado: {new Date(material.createdAt).toLocaleDateString("pt-BR")}</span>
                 </div>
               </div>
@@ -406,10 +466,20 @@ export default function BibliotecaPage() {
                 <Button 
                   asChild
                   variant="default" 
-                  className="flex-1 rounded-xl shadow-sm bg-primary hover:bg-primary/95 text-white"
+                  className={`flex-1 rounded-xl shadow-sm text-white ${
+                    isDriveLink 
+                      ? 'bg-blue-600 hover:bg-blue-700' 
+                      : 'bg-primary hover:bg-primary/95'
+                  }`}
                 >
                   <a href={material.fileUrl} target="_blank" rel="noopener noreferrer">
-                    <ArrowUpRight className="h-4 w-4 mr-2" /> Baixar Arquivo
+                    {isDriveLink ? (
+                      <><ExternalLink className="h-4 w-4 mr-2" /> Abrir no Google Drive</>
+                    ) : isExternal ? (
+                      <><ExternalLink className="h-4 w-4 mr-2" /> Abrir Link</>
+                    ) : (
+                      <><ArrowUpRight className="h-4 w-4 mr-2" /> Baixar Arquivo</>
+                    )}
                   </a>
                 </Button>
 
@@ -425,7 +495,7 @@ export default function BibliotecaPage() {
                 )}
               </div>
             </Card>
-          ))}
+          );})}
         </div>
       ) : (
         <Card className="border-none shadow-premium bg-white py-16 text-center">
@@ -449,7 +519,7 @@ export default function BibliotecaPage() {
       )}
 
       {/* Dialog para Upload de Novo Material */}
-      <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
+      <Dialog open={isUploadOpen} onOpenChange={(open) => { setIsUploadOpen(open); if (!open) resetForm(); }}>
         <DialogContent className="max-w-md rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-extrabold">Novo Material para Biblioteca</DialogTitle>
@@ -525,51 +595,120 @@ export default function BibliotecaPage() {
               </div>
             </div>
 
-            {/* Upload do Arquivo */}
-            <div className="space-y-2 pt-2">
-              <Label className="font-bold">Arquivo (PDF, DOCX, ZIP, etc. Max 4MB)</Label>
+            {/* Modo de Origem do Arquivo */}
+            <div className="space-y-3 pt-2">
+              <Label className="font-bold">Origem do Arquivo</Label>
               
-              {uploadedFile ? (
-                <div className="border border-green-200 bg-green-50/50 p-4 rounded-xl flex items-center justify-between gap-3 animate-fade-in">
-                  <div className="min-w-0 flex-1 flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-green-600 flex-shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold text-green-900 truncate">{uploadedFile.name}</p>
-                      <p className="text-[10px] text-green-600 font-medium">Tamanho: {formatBytes(uploadedFile.size)}</p>
+              {/* Toggle entre Upload e Link */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setUploadMode("link"); setUploadedFile(null); }}
+                  className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border-2 text-sm font-bold transition-all duration-200 ${
+                    uploadMode === "link"
+                      ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+                      : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  <Link className="h-4 w-4" />
+                  Link Externo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setUploadMode("file"); setExternalUrl(""); }}
+                  className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border-2 text-sm font-bold transition-all duration-200 ${
+                    uploadMode === "file"
+                      ? "border-primary bg-green-50 text-green-700 shadow-sm"
+                      : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload (até 4MB)
+                </button>
+              </div>
+
+              {/* Conteúdo do modo selecionado */}
+              {uploadMode === "link" ? (
+                /* Modo Link Externo (Google Drive, etc.) */
+                <div className="space-y-2 animate-fade-in">
+                  <div className="border border-blue-200 bg-blue-50/50 rounded-xl p-4 space-y-3">
+                    <div className="flex items-start gap-2">
+                      <div className="h-8 w-8 rounded-lg bg-white border border-blue-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <svg className="h-4 w-4" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
+                          <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+                          <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-20.4 35.3c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00ac47"/>
+                          <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l11.902 23.8z" fill="#ea4335"/>
+                          <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+                          <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
+                          <path d="m73.4 26.5-10.1-17.5c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 23.8h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-blue-800">Cole o link do Google Drive</p>
+                        <p className="text-[10px] text-blue-600 mt-0.5 leading-relaxed">Ideal para arquivos grandes (acima de 4MB). O link precisa estar com compartilhamento público ativado.</p>
+                      </div>
                     </div>
+                    <Input
+                      type="url"
+                      placeholder="https://drive.google.com/drive/folders/..."
+                      value={externalUrl}
+                      onChange={(e) => setExternalUrl(e.target.value)}
+                      className="rounded-lg h-11 bg-white border-blue-200 focus:border-blue-400 text-sm"
+                    />
+                    {externalUrl && (
+                      <div className="flex items-center gap-1.5 animate-fade-in">
+                        <div className="h-1.5 w-1.5 rounded-full bg-green-500"></div>
+                        <p className="text-[10px] text-green-700 font-semibold">Link pronto para salvar</p>
+                      </div>
+                    )}
                   </div>
-                  <Button 
-                    type="button" 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 text-green-700 hover:bg-green-100 hover:text-green-800 rounded-full"
-                    onClick={() => setUploadedFile(null)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
                 </div>
               ) : (
-                <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center bg-gray-50/50 flex flex-col items-center justify-center gap-2 relative hover:bg-gray-50 hover:border-gray-300 transition-all">
-                  {uploadProgress ? (
-                    <>
-                      <Loader2 className="h-8 w-8 text-primary animate-spin" />
-                      <p className="text-xs text-gray-500 font-semibold mt-1">Carregando arquivo...</p>
-                    </>
-                  ) : (
-                    <>
-                      <FileDown className="h-8 w-8 text-gray-400" />
-                      <div className="space-y-1">
-                        <p className="text-xs text-gray-500 font-bold">Clique para fazer upload</p>
-                        <p className="text-[10px] text-gray-400">PDF, Word, Excel, Powerpoint ou ZIP. Máx 4MB</p>
+                /* Modo Upload Direto */
+                <div className="animate-fade-in">
+                  {uploadedFile ? (
+                    <div className="border border-green-200 bg-green-50/50 p-4 rounded-xl flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex-1 flex items-center gap-2">
+                        <FileText className="h-5 w-5 text-green-600 flex-shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold text-green-900 truncate">{uploadedFile.name}</p>
+                          <p className="text-[10px] text-green-600 font-medium">Tamanho: {formatBytes(uploadedFile.size)}</p>
+                        </div>
                       </div>
-                      <Input
-                        type="file"
-                        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.epub,.zip,.rar"
-                        className="absolute inset-0 opacity-0 cursor-pointer"
-                        onChange={handleFileChange}
-                        disabled={uploadProgress}
-                      />
-                    </>
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-green-700 hover:bg-green-100 hover:text-green-800 rounded-full"
+                        onClick={() => setUploadedFile(null)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center bg-gray-50/50 flex flex-col items-center justify-center gap-2 relative hover:bg-gray-50 hover:border-gray-300 transition-all">
+                      {uploadProgress ? (
+                        <>
+                          <Loader2 className="h-8 w-8 text-primary animate-spin" />
+                          <p className="text-xs text-gray-500 font-semibold mt-1">Carregando arquivo...</p>
+                        </>
+                      ) : (
+                        <>
+                          <FileDown className="h-8 w-8 text-gray-400" />
+                          <div className="space-y-1">
+                            <p className="text-xs text-gray-500 font-bold">Clique para fazer upload</p>
+                            <p className="text-[10px] text-gray-400">PDF, Word, Excel, Powerpoint ou ZIP. Máx 4MB</p>
+                          </div>
+                          <Input
+                            type="file"
+                            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.epub,.zip,.rar"
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                            onChange={handleFileChange}
+                            disabled={uploadProgress}
+                          />
+                        </>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -588,7 +727,11 @@ export default function BibliotecaPage() {
               </Button>
               <Button 
                 type="submit" 
-                disabled={isSubmitting || uploadProgress || !uploadedFile} 
+                disabled={
+                  isSubmitting || uploadProgress || 
+                  (uploadMode === "file" && !uploadedFile) ||
+                  (uploadMode === "link" && !externalUrl.trim())
+                } 
                 className="premium-button min-w-[140px]"
               >
                 {isSubmitting ? (
