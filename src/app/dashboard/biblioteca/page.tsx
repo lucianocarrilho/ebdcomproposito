@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   FileDown, Loader2, Plus, Trash2, Search, Filter, 
-  BookOpen, Book, FileText, File, FolderArchive, ArrowUpRight
+  BookOpen, Book, FileText, File, FolderArchive, ArrowUpRight, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -112,31 +112,37 @@ export default function BibliotecaPage() {
     }
   };
 
-  // Upload do arquivo diretamente ao Vercel Blob (client-side upload via dynamic import)
+  // Upload do arquivo via FormData para o servidor
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Limite de 50MB
-    const maxSize = 50 * 1024 * 1024;
+    // Limite de 4MB (limite do Vercel serverless)
+    const maxSize = 4 * 1024 * 1024;
     if (file.size > maxSize) {
-      toast.error(`O arquivo é muito grande (${(file.size / 1024 / 1024).toFixed(2)}MB). Limite máximo de 50MB.`);
+      toast.error(`O arquivo é muito grande (${(file.size / 1024 / 1024).toFixed(1)}MB). Limite máximo de 4MB.`);
       return;
     }
 
     setUploadProgress(true);
     try {
-      // Dynamic import para evitar problemas de bundling no carregamento da página
-      const { upload } = await import("@vercel/blob/client");
+      const fd = new FormData();
+      fd.append("file", file);
 
-      const blob = await upload(file.name, file, {
-        access: "public",
-        handleUploadUrl: "/api/materials/upload",
+      const res = await fetch("/api/materials/upload", {
+        method: "POST",
+        body: fd,
       });
 
-      if (blob && blob.url) {
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(data?.error || `Erro no upload (HTTP ${res.status})`);
+      }
+
+      if (data?.url) {
         setUploadedFile({
-          url: blob.url,
+          url: data.url,
           name: file.name,
           size: file.size,
         });
@@ -146,8 +152,7 @@ export default function BibliotecaPage() {
       }
     } catch (err: any) {
       console.error("Erro no upload:", err);
-      const errorMsg = err?.message || "Erro desconhecido";
-      toast.error(`Erro ao enviar arquivo: ${errorMsg}`);
+      toast.error(`Erro ao enviar arquivo: ${err?.message || "Erro desconhecido"}`);
     } finally {
       setUploadProgress(false);
     }
@@ -522,7 +527,7 @@ export default function BibliotecaPage() {
 
             {/* Upload do Arquivo */}
             <div className="space-y-2 pt-2">
-              <Label className="font-bold">Arquivo (PDF, DOCX, ZIP, etc. Max 50MB)</Label>
+              <Label className="font-bold">Arquivo (PDF, DOCX, ZIP, etc. Max 4MB)</Label>
               
               {uploadedFile ? (
                 <div className="border border-green-200 bg-green-50/50 p-4 rounded-xl flex items-center justify-between gap-3 animate-fade-in">
@@ -555,7 +560,7 @@ export default function BibliotecaPage() {
                       <FileDown className="h-8 w-8 text-gray-400" />
                       <div className="space-y-1">
                         <p className="text-xs text-gray-500 font-bold">Clique para fazer upload</p>
-                        <p className="text-[10px] text-gray-400">PDF, Word, Excel, Powerpoint ou ZIP. Máx 50MB</p>
+                        <p className="text-[10px] text-gray-400">PDF, Word, Excel, Powerpoint ou ZIP. Máx 4MB</p>
                       </div>
                       <Input
                         type="file"
