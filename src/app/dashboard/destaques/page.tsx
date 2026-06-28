@@ -34,7 +34,7 @@ export default function DestaquesPage() {
     try {
       const res = await fetch("/api/highlights");
       const json = await res.json();
-      setHighlights(json || []);
+      setHighlights(Array.isArray(json) ? json : []);
     } catch (err) {
       toast.error("Erro ao carregar destaques");
     } finally {
@@ -50,7 +50,8 @@ export default function DestaquesPage() {
       ]);
       setClasses(await resClasses.json());
       const studentsJson = await resStudents.json();
-      setStudents(studentsJson.students || []);
+      // /api/students returns an array directly, not { students: [...] }
+      setStudents(Array.isArray(studentsJson) ? studentsJson : (studentsJson.students || []));
     } catch (err) {
       console.error("Erro ao carregar opções");
     }
