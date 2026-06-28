@@ -195,7 +195,17 @@ export async function GET(request: NextRequest) {
     }
 
     // Highlights
-    const highlightWhere: any = { quarter: selectedQuarter };
+    // Convert "2026-Q2" to "2º Trimestre 2026" format to match records
+    const quarterToHumanReadable = (q: string) => {
+      const [yearStr, qStr] = q.split("-");
+      const num = qStr.replace("Q", "");
+      return `${num}º Trimestre ${yearStr}`;
+    };
+    const quarterHuman = quarterToHumanReadable(selectedQuarter);
+
+    const highlightWhere: any = { 
+      quarter: { in: [selectedQuarter, quarterHuman] } 
+    };
     if (allowedClassIds) {
       highlightWhere.classId = { in: allowedClassIds };
     }
