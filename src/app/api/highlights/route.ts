@@ -3,7 +3,30 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const quarterParam = searchParams.get("quarter");
+
+    const where: any = {};
+
+    if (quarterParam) {
+      // Support both formats: "2026-Q2" and "2º Trimestre 2026"
+      const quarterToHumanReadable = (q: string) => {
+        const [yearStr, qStr] = q.split("-");
+        const num = qStr.replace("Q", "");
+        return `${num}º Trimestre ${yearStr}`;
+      };
+
+      // Check if it's in system format (e.g., "2026-Q2")
+      if (/^\d{4}-Q\d$/.test(quarterParam)) {
+        const quarterHuman = quarterToHumanReadable(quarterParam);
+        where.quarter = { in: [quarterParam, quarterHuman] };
+      } else {
+        where.quarter = quarterParam;
+      }
+    }
+
     const highlights = await prisma.quarterHighlight.findMany({
+      where,
       include: {
         student: {
           select: {

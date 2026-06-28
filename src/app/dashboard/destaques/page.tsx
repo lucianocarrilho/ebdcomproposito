@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Plus, Star, Trophy, Award, Loader2, Sparkles, User, Calendar } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Plus, Star, Trophy, Award, Loader2, Sparkles, Calendar, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,23 +15,83 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 
+// Gerar lista de trimestres (mesmo padrão do Dashboard)
+function getQuarters() {
+  const year = new Date().getFullYear();
+  const quarters = [];
+  for (let y = year - 1; y <= year + 1; y++) {
+    for (let q = 1; q <= 4; q++) {
+      quarters.push({
+        value: `${y}-Q${q}`,
+        label: `${q}º Trimestre ${y}`,
+      });
+    }
+  }
+  return quarters;
+}
+
+// Converter "2026-Q2" → "2º Trimestre 2026"
+function quarterToLabel(q: string) {
+  const match = q.match(/^(\d{4})-Q(\d)$/);
+  if (match) return `${match[2]}º Trimestre ${match[1]}`;
+  return q;
+}
+
+// Determinar o trimestre atual no formato do sistema
+function getCurrentQuarter() {
+  const now = new Date();
+  const q = Math.ceil((now.getMonth() + 1) / 3);
+  return `${now.getFullYear()}-Q${q}`;
+}
+
 export default function DestaquesPage() {
   const [highlights, setHighlights] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedQuarter, setSelectedQuarter] = useState<string>("");
+  const [editingHighlight, setEditingHighlight] = useState<any>(null);
+  const [deletingHighlight, setDeletingHighlight] = useState<any>(null);
+
+  // Form controlled state for editing
+  const [formStudentId, setFormStudentId] = useState("");
+  const [formType, setFormType] = useState("destaque");
+  const [formQuarter, setFormQuarter] = useState("");
+  const [formReason, setFormReason] = useState("");
+
+  const loadedRef = useRef(false);
+  const quarters = getQuarters();
 
   useEffect(() => {
-    fetchHighlights();
-    loadFormOptions();
+    if (!loadedRef.current) {
+      loadedRef.current = true;
+      // Load current quarter from settings like Dashboard does
+      fetch("/api/dashboard")
+        .then(res => res.json())
+        .then(data => {
+          const q = data.currentQuarter || getCurrentQuarter();
+          setSelectedQuarter(q);
+        })
+        .catch(() => {
+          setSelectedQuarter(getCurrentQuarter());
+        });
+      loadFormOptions();
+    }
   }, []);
 
-  const fetchHighlights = async () => {
+  useEffect(() => {
+    if (selectedQuarter) {
+      fetchHighlights(selectedQuarter);
+    }
+  }, [selectedQuarter]);
+
+  const fetchHighlights = async (quarter: string) => {
     setLoading(true);
     try {
-      const res = await fetch("/api/highlights");
+      const res = await fetch(`/api/highlights?quarter=${quarter}`);
       const json = await res.json();
       setHighlights(Array.isArray(json) ? json : []);
     } catch (err) {
@@ -50,51 +109,108 @@ export default function DestaquesPage() {
       ]);
       setClasses(await resClasses.json());
       const studentsJson = await resStudents.json();
-      // /api/students returns an array directly, not { students: [...] }
       setStudents(Array.isArray(studentsJson) ? studentsJson : (studentsJson.students || []));
     } catch (err) {
       console.error("Erro ao carregar opções");
     }
   };
 
+  const openNewDialog = () => {
+    setEditingHighlight(null);
+    setFormStudentId("");
+    setFormType("destaque");
+    setFormQuarter(selectedQuarter);
+    setFormReason("");
+    setIsDialogOpen(true);
+  };
+
+  const openEditDialog = (highlight: any) => {
+    setEditingHighlight(highlight);
+    setFormStudentId(highlight.studentId);
+    setFormType(highlight.type);
+    // Try to find the matching quarter value
+    const matchingQuarter = quarters.find(q => 
+      q.value === highlight.quarter || q.label === highlight.quarter
+    );
+    setFormQuarter(matchingQuarter?.value || selectedQuarter);
+    setFormReason(highlight.reason);
+    setIsDialogOpen(true);
+  };
+
+  const openDeleteDialog = (highlight: any) => {
+    setDeletingHighlight(highlight);
+    setIsDeleteDialogOpen(true);
+  };
+
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSubmitting(true);
-    const fd = new FormData(e.currentTarget);
-    
-    // Get class for the student if not in form
-    const studentId = fd.get("studentId") as string;
-    const student = students.find(s => s.id === studentId);
+
+    const student = students.find(s => s.id === formStudentId);
+    const quarterLabel = quarterToLabel(formQuarter);
 
     const payload = {
-      studentId: fd.get("studentId"),
-      classId: student?.classId || fd.get("classId"),
-      quarter: fd.get("quarter"),
-      reason: fd.get("reason"),
-      type: fd.get("type"),
+      studentId: formStudentId,
+      classId: student?.classId || student?.class?.id,
+      quarter: quarterLabel,
+      reason: formReason,
+      type: formType,
     };
 
     try {
-      const res = await fetch("/api/highlights", {
-        method: "POST",
+      const url = editingHighlight
+        ? `/api/highlights/${editingHighlight.id}`
+        : "/api/highlights";
+      const method = editingHighlight ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
         body: JSON.stringify(payload),
       });
 
       if (res.ok) {
-        toast.success("Destaque registrado com sucesso!");
+        toast.success(editingHighlight 
+          ? "Destaque atualizado com sucesso!" 
+          : "Destaque registrado com sucesso!"
+        );
         setIsDialogOpen(false);
-        fetchHighlights();
+        setEditingHighlight(null);
+        fetchHighlights(selectedQuarter);
       } else {
         throw new Error();
       }
     } catch (err) {
-      toast.error("Erro ao registrar destaque");
+      toast.error("Erro ao salvar destaque");
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Find most recent for cards
+  const handleDelete = async () => {
+    if (!deletingHighlight) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/highlights/${deletingHighlight.id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        toast.success("Destaque excluído com sucesso!");
+        setIsDeleteDialogOpen(false);
+        setDeletingHighlight(null);
+        fetchHighlights(selectedQuarter);
+      } else {
+        throw new Error();
+      }
+    } catch (err) {
+      toast.error("Erro ao excluir destaque");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const selectedQuarterLabel = quarters.find(q => q.value === selectedQuarter)?.label || selectedQuarter;
+
+  // Find most recent for cards (filtered by quarter)
   const latestDestaque = highlights.find(h => h.type === "destaque");
   const latestMissionario = highlights.find(h => h.type === "missionario");
 
@@ -103,11 +219,26 @@ export default function DestaquesPage() {
       <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="page-title">Mural de Honra</h1>
-          <p className="page-subtitle">Reconhecendo a dedicação dos nossos alunos</p>
+          <p className="page-subtitle">Reconhecendo a dedicação dos nossos alunos • {selectedQuarterLabel}</p>
         </div>
-        <Button onClick={() => setIsDialogOpen(true)} className="premium-button">
-          <Plus className="h-4 w-4 mr-2" /> Novo Destaque
-        </Button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 bg-white p-2 rounded-2xl border shadow-sm">
+            <Label htmlFor="quarterSelect" className="text-xs font-bold text-gray-400 pl-2 whitespace-nowrap">FILTRAR POR TRIMESTRE:</Label>
+            <Select value={selectedQuarter} onValueChange={setSelectedQuarter}>
+              <SelectTrigger id="quarterSelect" className="border-none bg-transparent font-bold text-primary focus:ring-0 w-44">
+                <SelectValue placeholder="Selecione o Trimestre" />
+              </SelectTrigger>
+              <SelectContent>
+                {quarters.map(q => (
+                  <SelectItem key={q.value} value={q.value}>{q.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button onClick={openNewDialog} className="premium-button">
+            <Plus className="h-4 w-4 mr-2" /> Novo Destaque
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -132,7 +263,7 @@ export default function DestaquesPage() {
                       <Sparkles className="h-8 w-8 text-amber-500" />
                     )}
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <Badge variant="warning" className="uppercase text-[10px] tracking-widest font-bold mb-1">
                       ⭐ Aluno Destaque
                     </Badge>
@@ -141,9 +272,19 @@ export default function DestaquesPage() {
                     {latestDestaque && (
                       <>
                         <p className="text-sm text-gray-600 mt-3 italic leading-relaxed">&ldquo;{latestDestaque.reason}&rdquo;</p>
-                        <div className="mt-3 flex items-center gap-1 text-amber-600">
-                          <Calendar className="h-3 w-3" />
-                          <span className="text-[10px] font-bold uppercase">{latestDestaque.quarter}</span>
+                        <div className="mt-3 flex items-center justify-between">
+                          <div className="flex items-center gap-1 text-amber-600">
+                            <Calendar className="h-3 w-3" />
+                            <span className="text-[10px] font-bold uppercase">{latestDestaque.quarter}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-primary" onClick={() => openEditDialog(latestDestaque)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-red-500" onClick={() => openDeleteDialog(latestDestaque)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
                       </>
                     )}
@@ -165,7 +306,7 @@ export default function DestaquesPage() {
                       <Trophy className="h-8 w-8 text-primary" />
                     )}
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <Badge className="bg-primary/10 text-primary hover:bg-primary/20 border-none uppercase text-[10px] tracking-widest font-bold mb-1">
                       🏆 Aluno Missionário
                     </Badge>
@@ -174,9 +315,19 @@ export default function DestaquesPage() {
                     {latestMissionario && (
                       <>
                         <p className="text-sm text-gray-600 mt-3 italic leading-relaxed">&ldquo;{latestMissionario.reason}&rdquo;</p>
-                        <div className="mt-3 flex items-center gap-1 text-primary">
-                          <Calendar className="h-3 w-3" />
-                          <span className="text-[10px] font-bold uppercase">{latestMissionario.quarter}</span>
+                        <div className="mt-3 flex items-center justify-between">
+                          <div className="flex items-center gap-1 text-primary">
+                            <Calendar className="h-3 w-3" />
+                            <span className="text-[10px] font-bold uppercase">{latestMissionario.quarter}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-primary" onClick={() => openEditDialog(latestMissionario)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-red-500" onClick={() => openDeleteDialog(latestMissionario)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
                       </>
                     )}
@@ -197,7 +348,7 @@ export default function DestaquesPage() {
             <CardContent className="p-0">
               <div className="divide-y divide-gray-50">
                 {highlights.map(d => (
-                  <div key={d.id} className="flex items-center justify-between p-5 hover:bg-gray-50/50 transition-colors">
+                  <div key={d.id} className="flex items-center justify-between p-5 hover:bg-gray-50/50 transition-colors group">
                     <div className="flex items-center gap-4">
                       <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
                         d.type === "destaque" ? "bg-amber-50 text-amber-500" : "bg-blue-50 text-primary"
@@ -211,16 +362,26 @@ export default function DestaquesPage() {
                       </div>
                     </div>
                     <div className="text-right flex flex-col items-end gap-2">
-                       <Badge variant={d.type === "destaque" ? "warning" : "default"}>
-                        {d.type === "destaque" ? "Destaque" : "Missionário"}
-                      </Badge>
+                       <div className="flex items-center gap-1">
+                         <Badge variant={d.type === "destaque" ? "warning" : "default"}>
+                          {d.type === "destaque" ? "Destaque" : "Missionário"}
+                        </Badge>
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-primary" onClick={() => openEditDialog(d)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-red-500" onClick={() => openDeleteDialog(d)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
                       <span className="text-[10px] font-bold text-gray-400 uppercase">{d.quarter}</span>
                     </div>
                   </div>
                 ))}
                 {highlights.length === 0 && (
                    <div className="p-10 text-center text-gray-400 italic">
-                    Nenhum destaque registrado no histórico.
+                    Nenhum destaque registrado neste trimestre.
                   </div>
                 )}
               </div>
@@ -229,17 +390,21 @@ export default function DestaquesPage() {
         </>
       )}
 
-      {/* Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      {/* Create / Edit Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) setEditingHighlight(null); }}>
         <DialogContent className="max-w-md rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-xl font-extrabold">Novo Reconhecimento</DialogTitle>
-            <DialogDescription>Premiar um aluno exemplar ou missionário</DialogDescription>
+            <DialogTitle className="text-xl font-extrabold">
+              {editingHighlight ? "Editar Reconhecimento" : "Novo Reconhecimento"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingHighlight ? "Alterar dados do reconhecimento" : "Premiar um aluno exemplar ou missionário"}
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSave} className="space-y-5 pt-4">
             <div className="space-y-2">
               <Label htmlFor="studentId" className="font-bold">Qual Aluno?</Label>
-              <Select name="studentId" required>
+              <Select value={formStudentId} onValueChange={setFormStudentId} required>
                 <SelectTrigger className="h-11 rounded-lg">
                   <SelectValue placeholder="Selecione o aluno" />
                 </SelectTrigger>
@@ -252,7 +417,7 @@ export default function DestaquesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="type" className="font-bold">Categoria</Label>
-                <Select name="type" defaultValue="destaque">
+                <Select value={formType} onValueChange={setFormType}>
                   <SelectTrigger className="h-11 rounded-lg">
                     <SelectValue />
                   </SelectTrigger>
@@ -264,22 +429,58 @@ export default function DestaquesPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="quarter" className="font-bold">Trimestre</Label>
-                <Input id="quarter" name="quarter" required defaultValue="1º Trimestre 2026" className="h-11 rounded-lg" />
+                <Select value={formQuarter} onValueChange={setFormQuarter}>
+                  <SelectTrigger className="h-11 rounded-lg">
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {quarters.map(q => (
+                      <SelectItem key={q.value} value={q.value}>{q.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="reason" className="font-bold">Motivo do Reconhecimento</Label>
-              <Textarea id="reason" name="reason" required className="rounded-lg resize-none min-h-[100px]" placeholder="Ex: Participativo em todas as lições e trouxe 5 novos convidados..." />
+              <Textarea 
+                id="reason" 
+                value={formReason} 
+                onChange={(e) => setFormReason(e.target.value)} 
+                required 
+                className="rounded-lg resize-none min-h-[100px]" 
+                placeholder="Ex: Participativo em todas as lições e trouxe 5 novos convidados..." 
+              />
             </div>
 
             <DialogFooter className="gap-2 sm:gap-0">
-               <Button type="button" variant="ghost" onClick={() => setIsDialogOpen(false)} disabled={submitting}>Cancelar</Button>
-               <Button type="submit" disabled={submitting} className="premium-button min-w-[120px]">
-                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Consagrar Aluno"}
+               <Button type="button" variant="ghost" onClick={() => { setIsDialogOpen(false); setEditingHighlight(null); }} disabled={submitting}>Cancelar</Button>
+               <Button type="submit" disabled={submitting || !formStudentId || !formReason} className="premium-button min-w-[120px]">
+                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : editingHighlight ? "Salvar Alterações" : "Consagrar Aluno"}
                </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={(open) => { setIsDeleteDialogOpen(open); if (!open) setDeletingHighlight(null); }}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-extrabold text-red-600">Excluir Destaque</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir o reconhecimento de <strong>{deletingHighlight?.student?.name}</strong>? Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0 pt-4">
+            <Button type="button" variant="ghost" onClick={() => { setIsDeleteDialogOpen(false); setDeletingHighlight(null); }} disabled={submitting}>
+              Cancelar
+            </Button>
+            <Button type="button" variant="destructive" onClick={handleDelete} disabled={submitting} className="min-w-[120px]">
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Excluir"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
