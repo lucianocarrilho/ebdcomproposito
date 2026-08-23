@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
         },
         select: { id: true }
       });
-      
+
       const classIds = teacherClasses.map(c => c.id);
       where.student = { classId: { in: classIds } };
     }
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     const justifications = await prisma.absenceJustification.findMany({
       where,
       include: {
-        student: { select: { name: true, class: { select: { name: true } } } },
+        student: { select: { name: true, photo: true, class: { select: { name: true } } } },
         registeredBy: { select: { name: true } }
       },
       orderBy: { date: "desc" }
@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
     const formatted = justifications.map(j => ({
       id: j.id,
       studentName: j.student.name,
+      studentPhoto: j.student.photo || null,
       className: j.student.class.name,
       date: j.date.toLocaleDateString("pt-BR"),
       dateRaw: j.date,
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
         status: "FALTA_JUSTIFICADA",
       },
       include: {
-        leader: { select: { name: true, role: true } }
+        leader: { select: { name: true, role: true, photo: true } }
       },
       orderBy: { date: "desc" }
     });
@@ -67,6 +68,7 @@ export async function GET(request: NextRequest) {
     const formattedLeaders = leaderJustifications.map(lj => ({
       id: lj.id,
       studentName: lj.leader.name,
+      studentPhoto: lj.leader.photo || null,
       className: `Liderança (${lj.leader.role})`,
       date: lj.date.toLocaleDateString("pt-BR"),
       dateRaw: lj.date,

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Plus, Search, UserPlus, Trophy, Loader2, User, Edit, Trash2 } from "lucide-react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -93,7 +94,7 @@ export default function VisitantesPage() {
     e.preventDefault();
     setSubmitting(true);
     const fd = new FormData(e.currentTarget);
-    
+
     const payload = {
       name: fd.get("visitorName"),
       date: fd.get("date"),
@@ -209,9 +210,8 @@ export default function VisitantesPage() {
                   {ranking.map((r, i) => (
                     <div key={r.nome} className="flex items-center justify-between p-3 rounded-xl bg-gray-50/50 border border-gray-100 hover:bg-white hover:shadow-md transition-all duration-300">
                       <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold text-white shadow-sm ${
-                          i === 0 ? "bg-accent" : i === 1 ? "bg-slate-400" : i === 2 ? "bg-amber-600" : "bg-gray-300"
-                        }`}>
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold text-white shadow-sm ${i === 0 ? "bg-accent" : i === 1 ? "bg-slate-400" : i === 2 ? "bg-amber-600" : "bg-gray-300"
+                          }`}>
                           {i + 1}
                         </div>
                         <div>
@@ -280,7 +280,16 @@ export default function VisitantesPage() {
                             </Badge>
                           </TableCell>
                           <TableCell className="hidden md:table-cell font-bold text-primary">
-                            {v.invitedBy?.name || "—"}
+                            {v.invitedBy ? (
+                              <div className="flex items-center gap-2">
+                                {v.invitedBy.photo ? (
+                                  <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0">
+                                    <Image src={v.invitedBy.photo} alt={v.invitedBy.name} width={24} height={24} className="object-cover w-full h-full" />
+                                  </div>
+                                ) : null}
+                                {v.invitedBy.name}
+                              </div>
+                            ) : "—"}
                           </TableCell>
                           {isAdmin && (
                             <TableCell className="text-right pr-4">
@@ -346,7 +355,7 @@ export default function VisitantesPage() {
                 key={editingVisitor?.id || "new"}
               />
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="date" className="font-bold">Data da Visita</Label>
@@ -415,7 +424,7 @@ export default function VisitantesPage() {
           <DialogHeader>
             <DialogTitle className="text-center font-bold text-red-600 border-red-100 pb-2 border-b">Excluir Visitante</DialogTitle>
             <DialogDescription className="text-center pt-4 text-sm">
-              Tem certeza que deseja excluir este visitante? <br/>
+              Tem certeza que deseja excluir este visitante? <br />
               <strong>Esta ação é irreversível.</strong>
             </DialogDescription>
           </DialogHeader>

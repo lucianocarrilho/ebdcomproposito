@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
     const visitors = await prisma.visitor.findMany({
       include: {
         class: true,
-        invitedBy: true,
+        invitedBy: { select: { id: true, name: true, photo: true } },
       },
       orderBy: { date: "desc" },
     });

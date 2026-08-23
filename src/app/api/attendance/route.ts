@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       },
       include: {
         items: {
-          include: { student: { select: { id: true, name: true } } },
+          include: { student: { select: { id: true, name: true, photo: true } } },
         },
       },
     });
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     // Get all students for the class
     const students = await prisma.student.findMany({
       where: { classId, active: true },
-      select: { id: true, name: true },
+      select: { id: true, name: true, photo: true },
       orderBy: { name: "asc" },
     });
 
@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
       return {
         studentId: student.id,
         studentName: student.name,
+        photo: student.photo || null,
         status: item?.status || "",
         observations: item?.observations || "",
       };

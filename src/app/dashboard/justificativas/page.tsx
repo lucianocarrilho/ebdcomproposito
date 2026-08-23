@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Plus, Search, FileText, Loader2, User, Crown } from "lucide-react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 interface Justification {
   id: string;
   studentName: string;
+  studentPhoto?: string | null;
   className: string;
   date: string;
   reason: string;
@@ -101,8 +103,14 @@ export default function JustificativasPage() {
                 <TableRow key={j.id} className={`hover:bg-gray-50/30 transition-colors ${j.isLeader ? 'bg-amber-50/20' : ''}`}>
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold ${j.isLeader ? 'bg-amber-100 text-amber-700' : 'bg-primary/10 text-primary'}`}>
-                        {j.isLeader ? <Crown className="h-3.5 w-3.5" /> : j.studentName.split(" ").map(n => n[0]).slice(0, 2).join("")}
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold overflow-hidden ${j.isLeader ? 'bg-amber-100 text-amber-700' : 'bg-primary/10 text-primary'}`}>
+                        {j.studentPhoto ? (
+                          <Image src={j.studentPhoto} alt={j.studentName} width={32} height={32} className="object-cover w-full h-full" />
+                        ) : j.isLeader ? (
+                          <Crown className="h-3.5 w-3.5" />
+                        ) : (
+                          j.studentName.split(" ").map(n => n[0]).slice(0, 2).join("")
+                        )}
                       </div>
                       <span className="font-bold text-gray-700">{j.studentName}</span>
                     </div>
@@ -121,7 +129,7 @@ export default function JustificativasPage() {
               ))}
             </TableBody>
           </Table>
-          
+
           {!loading && filtered.length === 0 && (
             <div className="text-center py-20 bg-gray-50/20">
               <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
