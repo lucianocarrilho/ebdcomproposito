@@ -17,8 +17,10 @@ export async function GET(request: NextRequest) {
     }
 
     if (!selectedQuarter) {
-      const settings = await prisma.settings.findFirst();
-      selectedQuarter = settings?.currentQuarter || "2026-Q1";
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentQuarter = Math.floor(now.getMonth() / 3) + 1;
+      selectedQuarter = `${currentYear}-Q${currentQuarter}`;
     }
 
     const userRole = (session.user as any).role;
