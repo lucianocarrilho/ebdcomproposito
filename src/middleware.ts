@@ -16,8 +16,8 @@ export function middleware(request: NextRequest) {
     request.cookies.has("next-auth.session-token") ||
     request.cookies.has("__Secure-next-auth.session-token");
 
-  // Protect dashboard routes
-  if (pathname.startsWith("/dashboard") && !hasToken) {
+  // Protect dashboard and select-organization routes
+  if ((pathname.startsWith("/dashboard") || pathname.startsWith("/select-organization")) && !hasToken) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
@@ -35,5 +35,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/dashboard/:path*", "/api/:path*"],
+  matcher: ["/", "/dashboard/:path*", "/select-organization", "/api/:path*"],
 };

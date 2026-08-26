@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Bell, Search, User, LogOut } from "lucide-react";
+import { Bell, Search, User, LogOut, Building2 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getGreeting } from "@/lib/utils";
@@ -17,19 +18,26 @@ const roleLabels: Record<string, string> = {
 };
  
 export function Topbar() {
-  const { data: session } = useSession();
+  const router = useRouter();
+  const { data: session, update } = useSession();
   const [liveImage, setLiveImage] = useState<string | null>(null);
   const userName = session?.user?.name || "Usuário";
-  const userRole = (session?.user as Record<string, unknown>)?.role as string || "APOIO";
+  const user = session?.user as Record<string, any>;
+  const activeOrgId = user?.activeOrganizationId;
+  const memberships = user?.memberships || [];
+  
+  const currentMembership = memberships.find((m: any) => m.organizationId === activeOrgId);
+  const userRole = currentMembership?.role || user?.role || "APOIO";
+  const orgName = user?.activeOrganizationName || currentMembership?.organizationName || (user?.isGlobalAdmin ? "Admin Global" : "Sem Congregação");
  
   // Buscar foto atualizada para contornar cache da sessão
   useEffect(() => {
     async function syncUserPhoto() {
-      if (session?.user?.email) {
+      if (user?.email) {
         try {
           const res = await fetch("/api/users");
           const users = await res.json();
-          const currentUser = users.find((u: any) => u.email === session?.user?.email);
+          const currentUser = users.find((u: any) => u.email === user.email);
           if (currentUser?.image) {
             setLiveImage(currentUser.image);
           }
@@ -41,7 +49,24 @@ export function Topbar() {
     syncUserPhoto();
   }, [session]);
  
-  const userImage = liveImage || session?.user?.image;
+  const userImage = liveImage || user?.image;
+
+  const handleReturnToAdmin = async () => {
+    try {
+      const res = await fetch("/api/auth/clear-org", {
+        method: "POST",
+      });
+      if (res.ok) {
+        await update({ activeOrganizationId: null });
+        router.push("/admin");
+        router.refresh();
+      } else {
+        console.error("Erro ao limpar contexto global");
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-30 h-16 bg-white/80 backdrop-blur-md border-b border-gray-200 flex items-center justify-between px-4 lg:px-8">
@@ -53,7 +78,7 @@ export function Topbar() {
         <div className="relative hidden md:block">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
-            placeholder="Buscar alunos, classes..."
+            placeholder={!activeOrgId ? "Buscar congregações ou usuários..." : "Buscar alunos, classes..."}
             className="pl-9 w-64 bg-gray-50 border-gray-200"
           />
         </div>
@@ -61,6 +86,17 @@ export function Topbar() {
 
       {/* Right - Actions */}
       <div className="flex items-center gap-2">
+        
+        {/* Active Organization Badge */}
+        <div className="hidden md:flex flex-col items-end mr-2">
+          <span className="text-[10px] uppercase font-bold text-gray-400">
+            {activeOrgId ? "Congregação Atual" : "Modo Global"}
+          </span>
+          <span className={`text-sm font-semibold truncate max-w-[150px] ${activeOrgId ? 'text-blue-600' : 'text-purple-600'}`}>
+            {orgName}
+          </span>
+        </div>
+
         <NotificationTray />
 
         <div className="h-8 w-px bg-gray-200 mx-1" />
@@ -79,9 +115,37 @@ export function Topbar() {
           </div>
           <div className="hidden sm:block text-left">
             <p className="text-xs font-bold text-gray-900 leading-none">{userName}</p>
-            <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-tighter font-semibold">{roleLabels[userRole] || userRole}</p>
+            <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-tighter font-semibold">
+              {!activeOrgId && user?.isGlobalAdmin ? "SUPERADMIN" : (roleLabels[userRole] || userRole)}
+            </p>
           </div>
         </div>
+
+        {/* Retorno Administração Global Button */}
+        {user?.isGlobalAdmin && activeOrgId && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleReturnToAdmin}
+            title="Voltar à Administração Global"
+            className="text-purple-600 hover:text-purple-800 hover:bg-purple-50 text-xs font-semibold px-2 ml-2"
+          >
+            Voltar a Admin Global
+          </Button>
+        )}
+
+        {/* Switch Congregation Button */}
+        {(memberships.length > 1 || user?.isGlobalAdmin) && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => window.location.href = "/select-organization"}
+            title="Trocar Congregação"
+            className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 ml-1"
+          >
+            <Building2 className="h-4 w-4" />
+          </Button>
+        )}
 
         <Button
           variant="ghost"

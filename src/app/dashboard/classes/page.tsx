@@ -199,15 +199,17 @@ export default function ClassesPage() {
           <h1 className="page-title">Classes</h1>
           <p className="page-subtitle">Gerencie as classes da Escola Bíblica Dominical</p>
         </div>
-        <Button
-          onClick={() => {
-            setEditingClass(null);
-            setIsDialogOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4" />
-          Nova Classe
-        </Button>
+        {((session?.user as any)?.role === "ADMIN" || (session?.user as any)?.role === "DIRIGENTE" || (session?.user as any)?.globalAdminMode) && (
+          <Button
+            onClick={() => {
+              setEditingClass(null);
+              setIsDialogOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            Nova Classe
+          </Button>
+        )}
       </div>
 
       {/* Search */}

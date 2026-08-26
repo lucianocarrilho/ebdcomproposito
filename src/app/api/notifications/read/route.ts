@@ -12,11 +12,14 @@ export async function POST(req: Request) {
 
     if (!notificationId) return NextResponse.json({ error: "ID não fornecido" }, { status: 400 });
 
+    const userId = session.user.id;
+    if (!userId) return NextResponse.json({ error: "ID de usuário inválido" }, { status: 400 });
+
     await prisma.notificationRead.upsert({
       where: {
         notificationId_userId: {
           notificationId,
-          userId: session.user.id
+          userId
         }
       },
       update: {
@@ -24,7 +27,7 @@ export async function POST(req: Request) {
       },
       create: {
         notificationId,
-        userId: session.user.id
+        userId
       }
     });
 

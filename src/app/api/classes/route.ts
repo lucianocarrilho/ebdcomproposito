@@ -1,23 +1,25 @@
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOrganization } from "@/lib/permissions";
 import { NextRequest, NextResponse } from "next/server";
 
 // GET - Listar classes
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    const authResult = await requireOrganization(true);
+    if ('error' in authResult) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
     }
+    
+    const { activeOrganizationId, orgRole, user } = authResult as any;
+    const userName = user.name || "";
 
-    const role = (session.user as any).role;
-    const classId = (session.user as any).classId;
-    const userName = session.user?.name || "";
-
-    const where: any = {};
-    if (role === "PROFESSOR") {
+    const where: any = {
+      organizationId: activeOrganizationId
+    };
+    
+    if (orgRole === "PROFESSOR") {
       where.OR = [
-        { id: classId || undefined },
+        { id: user.classId || undefined },
         { professor: { contains: userName } }
       ];
     }
@@ -43,7 +45,6 @@ export async function GET(request: NextRequest) {
       _count: {
         students: cls.students.length,
       },
-      // Usar campos diretos da classe, se existirem, ou o primeiro líder com esse cargo como backup
       professor: cls.professor || cls.leaders.find((l) => l.role === "Professor")?.name || "",
       dirigente: cls.dirigente || cls.leaders.find((l) => l.role === "Dirigente")?.name || "",
       viceDirigente: cls.viceDirigente || cls.leaders.find((l) => l.role === "Vice-Dirigente")?.name || "",
@@ -59,13 +60,24 @@ export async function GET(request: NextRequest) {
 // POST - Criar classe
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session || (session.user as any).role !== "ADMIN") {
+    const authResult = await requireOrganization(true);
+    if ('error' in authResult) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    }
+    
+    const { activeOrganizationId, orgRole } = authResult as any;
+
+    // Only Admin or Dirigente can create classes
+    if (orgRole !== "ADMIN" && orgRole !== "DIRIGENTE") {
       return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
     }
 
     const body = await request.json();
-    const { name, description, audience, active, professor, dirigente, viceDirigente } = body;
+    const { name, description, audience, active, professor, dirigente, viceDirigente, organizationId } = body;
+    
+    if (organizationId !== undefined) {
+      return NextResponse.json({ error: "O campo organizationId não é permitido no corpo da requisição." }, { status: 400 });
+    }
 
     if (!name) {
       return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 });
@@ -79,7 +91,8 @@ export async function POST(request: NextRequest) {
         professor,
         dirigente,
         viceDirigente,
-        status: active !== undefined ? active : true 
+        status: active !== undefined ? active : true,
+        organizationId: activeOrganizationId
       },
     });
 

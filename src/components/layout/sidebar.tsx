@@ -26,9 +26,11 @@ import {
   Fingerprint,
   Camera,
   FileDown,
+  Building2,
+  LogOut,
 } from "lucide-react";
 
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
@@ -51,17 +53,25 @@ const navigation = [
   { name: "Configurações", href: "/dashboard/configuracoes", icon: Settings, roles: ["ADMIN"] },
 ];
 
+const globalNavigation = [
+  { name: "Visão Geral", href: "/admin", icon: LayoutDashboard },
+  { name: "Congregações", href: "/admin/organizations", icon: Building2 },
+];
+
 export function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const userRole = (session?.user as any)?.role || "APOIO";
+  const user = session?.user as any;
+  const userRole = user?.role || "APOIO";
+  const activeOrgId = user?.activeOrganizationId;
+  const isGlobalMode = !activeOrgId && user?.isGlobalAdmin;
 
-  const filteredNavigation = navigation.filter(item => 
-    item.roles.includes(userRole)
-  );
+  const filteredNavigation = isGlobalMode 
+    ? globalNavigation 
+    : navigation.filter(item => item.roles.includes(userRole));
 
   return (
     <>
@@ -135,7 +145,7 @@ export function Sidebar() {
         <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
           {filteredNavigation.map((item) => {
             const isActive = pathname === item.href || 
-              (item.href !== "/dashboard" && pathname.startsWith(item.href));
+              (item.href !== "/dashboard" && item.href !== "/admin" && pathname.startsWith(item.href));
             return (
               <Link
                 key={item.name}
@@ -156,6 +166,22 @@ export function Sidebar() {
             );
           })}
         </nav>
+
+        {isGlobalMode && (
+          <div className="p-4 border-t border-white/10">
+            <button
+              onClick={() => signOut({ callbackUrl: "/" })}
+              className={cn(
+                "flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 text-gray-300 hover:bg-red-500/10 hover:text-red-400",
+                collapsed && "justify-center px-2"
+              )}
+              title={collapsed ? "Sair" : undefined}
+            >
+              <LogOut className="h-5 w-5 flex-shrink-0" />
+              {!collapsed && <span>Sair</span>}
+            </button>
+          </div>
+        )}
 
         {/* Collapse toggle (desktop) */}
         <button

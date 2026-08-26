@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
+import { requireOrganization } from "@/lib/permissions";
 import { NextRequest, NextResponse } from "next/server";
 import { AttendanceStatus } from "@prisma/client";
-import { auth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -11,10 +11,11 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     let selectedQuarter = searchParams.get("quarter");
 
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    const authResult = await requireOrganization(true);
+    if ('error' in authResult) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
     }
+    const { activeOrganizationId, orgRole, user } = authResult as any;
 
     if (!selectedQuarter) {
       const now = new Date();
@@ -23,17 +24,16 @@ export async function GET(request: NextRequest) {
       selectedQuarter = `${currentYear}-Q${currentQuarter}`;
     }
 
-    const userRole = (session.user as any).role;
-    const userClassId = (session.user as any).classId;
-    const userName = session.user?.name || "";
+    const userName = user.name || "";
 
     // Determine allowed classes for filtering
     let allowedClassIds: string[] | null = null;
-    if (userRole === "PROFESSOR") {
+    if (orgRole === "PROFESSOR") {
       const teacherClasses = await prisma.class.findMany({
         where: {
+          organizationId: activeOrganizationId,
           OR: [
-            { id: userClassId || undefined },
+            { id: user.classId || undefined },
             { professor: { contains: userName } }
           ]
         },
@@ -42,11 +42,15 @@ export async function GET(request: NextRequest) {
       allowedClassIds = teacherClasses.map(c => c.id);
     }
 
-    const studentWhere = allowedClassIds 
-      ? { classId: { in: allowedClassIds }, active: true } 
-      : { active: true };
+    const studentWhere: any = { organizationId: activeOrganizationId };
+    if (allowedClassIds) {
+      studentWhere.classId = { in: allowedClassIds };
+    }
 
-    const classWhere = allowedClassIds ? { id: { in: allowedClassIds }, status: true } : { status: true };
+    const classWhere: any = { organizationId: activeOrganizationId, status: true };
+    if (allowedClassIds) {
+      classWhere.id = { in: allowedClassIds };
+    }
 
     // Totals
     const [
@@ -58,9 +62,9 @@ export async function GET(request: NextRequest) {
       prisma.student.count({ where: studentWhere }),
       prisma.student.count({ where: { ...studentWhere, active: true } }),
       prisma.class.count({ where: classWhere }),
-      userRole === "ADMIN" 
-        ? prisma.leader.count({ where: { active: true } }) 
-        : Promise.resolve(0), // Leaders usually only visible to Admin
+      orgRole === "ADMIN" 
+        ? prisma.leader.count({ where: { organizationId: activeOrganizationId, active: true } }) 
+        : Promise.resolve(0),
     ]);
 
     // Last Sunday attendance
@@ -70,7 +74,10 @@ export async function GET(request: NextRequest) {
     lastSunday.setHours(0, 0, 0, 0);
 
     const attendanceWhere: any = {
-      record: { date: { gte: lastSunday } },
+      record: { 
+        organizationId: activeOrganizationId,
+        date: { gte: lastSunday } 
+      },
     };
     if (allowedClassIds) {
       attendanceWhere.record.classId = { in: allowedClassIds };
@@ -110,6 +117,12 @@ export async function GET(request: NextRequest) {
       where: {
         active: true,
         birthDate: { not: null },
+        memberships: {
+          some: {
+            organizationId: activeOrganizationId,
+            status: "ACTIVE"
+          }
+        }
       },
       select: {
         id: true,
@@ -127,7 +140,7 @@ export async function GET(request: NextRequest) {
         name: u.name, 
         birthDate: u.birthDate, 
         photo: u.image, 
-        class: { name: `Equipe (${u.role})` } 
+        class: { name: `Equipe` } 
       }))
     ];
 
@@ -148,7 +161,11 @@ export async function GET(request: NextRequest) {
           by: ["status"],
           _count: { id: true },
           where: {
-            record: { classId: cls.id, date: { gte: lastSunday } },
+            record: { 
+              classId: cls.id, 
+              organizationId: activeOrganizationId,
+              date: { gte: lastSunday } 
+            },
           },
         });
 
@@ -174,7 +191,10 @@ export async function GET(request: NextRequest) {
       weekEnd.setDate(weekStart.getDate() + 7);
 
       const wkWhere: any = {
-        record: { date: { gte: weekStart, lt: weekEnd } },
+        record: { 
+          organizationId: activeOrganizationId,
+          date: { gte: weekStart, lt: weekEnd } 
+        },
       };
       if (allowedClassIds) {
         wkWhere.record.classId = { in: allowedClassIds };
@@ -197,7 +217,6 @@ export async function GET(request: NextRequest) {
     }
 
     // Highlights
-    // Convert "2026-Q2" to "2º Trimestre 2026" format to match records
     const quarterToHumanReadable = (q: string) => {
       const [yearStr, qStr] = q.split("-");
       const num = qStr.replace("Q", "");
@@ -206,6 +225,7 @@ export async function GET(request: NextRequest) {
     const quarterHuman = quarterToHumanReadable(selectedQuarter);
 
     const highlightWhere: any = { 
+      organizationId: activeOrganizationId,
       quarter: { in: [selectedQuarter, quarterHuman] } 
     };
     if (allowedClassIds) {
@@ -238,6 +258,7 @@ export async function GET(request: NextRequest) {
           where: {
             status: "PRESENTE",
             record: {
+              organizationId: activeOrganizationId,
               date: {
                 gte: startDate,
                 lte: endDate,
@@ -261,7 +282,6 @@ export async function GET(request: NextRequest) {
         }))
         .filter((s) => s.presences > 0);
 
-      // Agrupar por classe e pegar apenas o aluno com mais presenças de cada classe
       const classChampionsMap = new Map<string, typeof studentsMapped[0]>();
       
       for (const student of studentsMapped) {
@@ -295,6 +315,7 @@ export async function GET(request: NextRequest) {
 
     const avisosCalendario = await prisma.event.findMany({
       where: {
+        organizationId: activeOrganizationId,
         date: {
           gte: startOfMonth,
           lte: endOfMonth,
@@ -307,6 +328,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch recent visitors (current month)
     const visitorsWhere: any = {
+      organizationId: activeOrganizationId,
       date: { gte: startOfMonth, lte: endOfMonth },
     };
     if (allowedClassIds) {
@@ -332,7 +354,7 @@ export async function GET(request: NextRequest) {
         totalStudents,
         activeStudents,
         totalClasses,
-        totalLeaders: userRole === "ADMIN" ? totalLeaders : 0,
+        totalLeaders: orgRole === "ADMIN" ? totalLeaders : 0,
         presentes,
         faltas,
         justificadas,

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOrganization } from "@/lib/permissions";
 import { NextRequest, NextResponse } from "next/server";
 
 // GET - Buscar classe por ID
@@ -9,21 +9,23 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const session = await auth();
+    const authResult = await requireOrganization(true);
     
-    if (!session) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    if ('error' in authResult) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
     }
 
-    const role = (session.user as any).role;
-    const userClassId = (session.user as any).classId;
+    const { activeOrganizationId, orgRole, user } = authResult as any;
 
-    if (role === "PROFESSOR" && userClassId !== id) {
+    if (orgRole === "PROFESSOR" && user.classId !== id) {
       return NextResponse.json({ error: "Acesso negado a esta classe" }, { status: 403 });
     }
 
     const cls = await prisma.class.findUnique({
-      where: { id },
+      where: { 
+        id,
+        organizationId: activeOrganizationId
+      },
       include: {
         students: { where: { active: true }, orderBy: { name: "asc" } },
         leaders: { where: { active: true } },
@@ -48,8 +50,13 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session || (session.user as any).role !== "ADMIN") {
+    const authResult = await requireOrganization(true);
+    if ('error' in authResult) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    }
+    const { activeOrganizationId, orgRole } = authResult as any;
+
+    if (orgRole !== "ADMIN" && orgRole !== "DIRIGENTE") {
       return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
     }
     const { id } = await params;
@@ -58,8 +65,17 @@ export async function PUT(
     // Use active from frontend or status from body, fallback to current status
     const updatedStatus = active !== undefined ? active : status;
 
+    // Check if exists in current org
+    const existing = await prisma.class.findUnique({
+      where: { id, organizationId: activeOrganizationId }
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: "Classe não encontrada" }, { status: 404 });
+    }
+
     const updated = await prisma.class.update({
-      where: { id },
+      where: { id, organizationId: activeOrganizationId },
       data: { 
         name, 
         description, 
@@ -84,17 +100,26 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session || (session.user as any).role !== "ADMIN") {
+    const authResult = await requireOrganization(true);
+    if ('error' in authResult) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    }
+    const { activeOrganizationId, orgRole } = authResult as any;
+
+    if (orgRole !== "ADMIN" && orgRole !== "DIRIGENTE") {
       return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
     }
     const { id } = await params;
 
-    // Soft delete check: only block if there are ACTIVE students? 
-    // For now, let's allow deletion if the user is sure, or at least fix the logic.
-    // If we want to allow deletion even with students, we'd need to handle references.
-    // Let's stick to the current safety but ensure the ID is correct.
-    const count = await prisma.student.count({ where: { classId: id } });
+    const existing = await prisma.class.findUnique({
+      where: { id, organizationId: activeOrganizationId }
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: "Classe não encontrada" }, { status: 404 });
+    }
+
+    const count = await prisma.student.count({ where: { classId: id, organizationId: activeOrganizationId } });
     if (count > 0) {
       return NextResponse.json(
         { error: `Não é possível excluir uma classe que possui ${count} aluno(s) vinculado(s).` },
@@ -102,7 +127,7 @@ export async function DELETE(
       );
     }
 
-    await prisma.class.delete({ where: { id } });
+    await prisma.class.delete({ where: { id, organizationId: activeOrganizationId } });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Erro ao excluir classe:", error);

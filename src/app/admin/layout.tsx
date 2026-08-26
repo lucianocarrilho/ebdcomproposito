@@ -1,14 +1,13 @@
-import { Sidebar } from "@/components/layout/sidebar";
+import { requireGlobalAdmin } from "@/lib/permissions";
 import { Topbar } from "@/components/layout/topbar";
+import { Sidebar } from "@/components/layout/sidebar";
 
-import { requireOrganization } from "@/lib/permissions";
-
-export default async function DashboardLayout({
+export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  await requireOrganization();
+  await requireGlobalAdmin();
 
   return (
     <div className="min-h-screen flex bg-gray-50">

@@ -24,279 +24,317 @@ enum AttendanceStatus {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String
-  email         String    @unique
-  password      String
-  role          Role      @default(APOIO)
-  image         String?
-  birthDate     DateTime?
-  active        Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  classId       String?
-  class         Class?    @relation("UserClass", fields: [classId], references: [id])
-  justifications AbsenceJustification[]
-  sentNotifications Notification[] @relation("SentNotifications")
-  
+  id                String                   @id @default(cuid())
+  name              String
+  email             String                   @unique
+  password          String
+  role              Role                     @default(APOIO)
+  image             String?
+  birthDate         DateTime?
+  active            Boolean                  @default(true)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  classId           String?
+  class             Class?                   @relation("UserClass", fields: [classId], references: [id])
+  justifications    AbsenceJustification[]
+  sentNotifications Notification[]           @relation("SentNotifications")
+  isGlobalAdmin     Boolean                  @default(false)
+  memberships       OrganizationMembership[]
+
   @@map("users")
 }
 
 model Class {
-  id            String    @id @default(cuid())
+  id            String   @id @default(cuid())
   name          String
   description   String?
   audience      String?
   professor     String?
   dirigente     String?
   viceDirigente String?
-  status        Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  students      Student[]
-  leaders       Leader[]
-  lessons       Lesson[]
+  status        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  students          Student[]
+  leaders           Leader[]
+  lessons           Lesson[]
   attendanceRecords AttendanceRecord[]
-  visitors      Visitor[]
+  visitors          Visitor[]
   quarterHighlights QuarterHighlight[]
-  users         User[]    @relation("UserClass")
-  photoAlbums   PhotoAlbum[]
-  materials     Material[]
-  
+  users             User[]             @relation("UserClass")
+  photoAlbums       PhotoAlbum[]
+  materials         Material[]
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   @@map("classes")
 }
 
 model Student {
-  id            String    @id @default(cuid())
-  name          String
-  gender        String?
-  birthDate     DateTime?
-  phone         String?
-  address       String?
+  id             String    @id @default(cuid())
+  name           String
+  gender         String?
+  birthDate      DateTime?
+  phone          String?
+  address        String?
   guardian       String?
-  classId       String
-  class         Class     @relation(fields: [classId], references: [id])
-  enrollmentDate DateTime @default(now())
-  active        Boolean   @default(true)
-  observations  String?
-  photo         String?
-  baptized      Boolean   @default(false)
-  member        Boolean   @default(false)
-  newConvert    Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  attendanceItems    AttendanceItem[]
-  justifications     AbsenceJustification[]
-  visitorsInvited    Visitor[]
-  visitorPoints      StudentVisitorPoint[]
-  quarterHighlights  QuarterHighlight[]
-  rewards            Reward[]
-  
+  classId        String
+  class          Class     @relation(fields: [classId], references: [id])
+  enrollmentDate DateTime  @default(now())
+  active         Boolean   @default(true)
+  observations   String?
+  photo          String?
+  baptized       Boolean   @default(false)
+  member         Boolean   @default(false)
+  newConvert     Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  attendanceItems   AttendanceItem[]
+  justifications    AbsenceJustification[]
+  visitorsInvited   Visitor[]
+  visitorPoints     StudentVisitorPoint[]
+  quarterHighlights QuarterHighlight[]
+  rewards           Reward[]
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   @@map("students")
 }
 
 model Leader {
-  id            String    @id @default(cuid())
-  name          String
-  role          String    // Professor, Dirigente, Vice-Dirigente
-  phone         String?
-  email         String?
-  classId       String?
-  class         Class?    @relation(fields: [classId], references: [id])
-  startDate     DateTime  @default(now())
-  observations  String?
-  photo         String?
-  active        Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  attendance    LeaderAttendance[]
-  
+  id           String   @id @default(cuid())
+  name         String
+  role         String // Professor, Dirigente, Vice-Dirigente
+  phone        String?
+  email        String?
+  classId      String?
+  class        Class?   @relation(fields: [classId], references: [id])
+  startDate    DateTime @default(now())
+  observations String?
+  photo        String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  attendance LeaderAttendance[]
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   @@map("leaders")
 }
- 
+
 model LeaderAttendance {
-  id            String    @id @default(cuid())
+  id            String           @id @default(cuid())
   leaderId      String
-  leader        Leader    @relation(fields: [leaderId], references: [id])
+  leader        Leader           @relation(fields: [leaderId], references: [id])
   date          DateTime
   status        AttendanceStatus
   justification String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
- 
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
   @@unique([leaderId, date])
   @@map("leader_attendance")
 }
 
 model Lesson {
-  id            String    @id @default(cuid())
-  number        Int
-  title         String
-  quarter       String
-  category      String    @default("Adultos") // Adultos, Jovens, Adolescentes, Crianças
-  date          DateTime?
-  classId       String?
-  class         Class?    @relation(fields: [classId], references: [id])
-  teacherName   String?
-  summary       String?
-  bibleText     String?
-  image         String?
-  status        String    @default("pendente")
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
+  id          String    @id @default(cuid())
+  number      Int
+  title       String
+  quarter     String
+  category    String    @default("Adultos") // Adultos, Jovens, Adolescentes, Crianças
+  date        DateTime?
+  classId     String?
+  class       Class?    @relation(fields: [classId], references: [id])
+  teacherName String?
+  summary     String?
+  bibleText   String?
+  image       String?
+  status      String    @default("pendente")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   @@map("lessons")
 }
 
 model AttendanceRecord {
-  id            String    @id @default(cuid())
-  date          DateTime
-  classId       String
-  class         Class     @relation(fields: [classId], references: [id])
-  observations  String?
-  biblias       Int       @default(0)
-  revistas      Int       @default(0)
-  ofertas       Decimal   @default(0) @db.Decimal(10, 2)
-  outros        Int       @default(0)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  items         AttendanceItem[]
-  
+  id           String   @id @default(cuid())
+  date         DateTime
+  classId      String
+  class        Class    @relation(fields: [classId], references: [id])
+  observations String?
+  biblias      Int      @default(0)
+  revistas     Int      @default(0)
+  ofertas      Decimal  @default(0) @db.Decimal(10, 2)
+  outros       Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  items AttendanceItem[]
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   @@unique([date, classId])
   @@map("attendance_records")
 }
 
 model AttendanceItem {
-  id            String           @id @default(cuid())
-  recordId      String
-  record        AttendanceRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
-  studentId     String
-  student       Student          @relation(fields: [studentId], references: [id])
-  status        AttendanceStatus
-  observations  String?
-  createdAt     DateTime         @default(now())
-  
+  id           String           @id @default(cuid())
+  recordId     String
+  record       AttendanceRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      Student          @relation(fields: [studentId], references: [id])
+  status       AttendanceStatus
+  observations String?
+  createdAt    DateTime         @default(now())
+
   @@unique([recordId, studentId])
   @@map("attendance_items")
 }
 
 model AbsenceJustification {
-  id            String    @id @default(cuid())
-  studentId     String
-  student       Student   @relation(fields: [studentId], references: [id])
-  date          DateTime
-  reason        String
-  observations  String?
+  id             String   @id @default(cuid())
+  studentId      String
+  student        Student  @relation(fields: [studentId], references: [id])
+  date           DateTime
+  reason         String
+  observations   String?
   registeredById String?
-  registeredBy  User?     @relation(fields: [registeredById], references: [id])
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
+  registeredBy   User?    @relation(fields: [registeredById], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   @@map("absence_justifications")
 }
 
 model Visitor {
-  id            String    @id @default(cuid())
-  name          String
-  date          DateTime
-  classId       String
-  class         Class     @relation(fields: [classId], references: [id])
-  invitedById   String?
-  invitedBy     Student?  @relation(fields: [invitedById], references: [id])
-  observations  String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
+  id           String   @id @default(cuid())
+  name         String
+  date         DateTime
+  classId      String
+  class        Class    @relation(fields: [classId], references: [id])
+  invitedById  String?
+  invitedBy    Student? @relation(fields: [invitedById], references: [id])
+  observations String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   @@map("visitors")
 }
 
 model StudentVisitorPoint {
-  id            String    @id @default(cuid())
-  studentId     String
-  student       Student   @relation(fields: [studentId], references: [id])
-  quarter       String
-  points        Int       @default(0)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id])
+  quarter   String
+  points    Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([studentId, quarter])
   @@map("student_visitor_points")
 }
 
 model QuarterHighlight {
-  id            String    @id @default(cuid())
-  studentId     String
-  student       Student   @relation(fields: [studentId], references: [id])
-  classId       String
-  class         Class     @relation(fields: [classId], references: [id])
-  quarter       String
-  reason        String
-  date          DateTime  @default(now())
-  photo         String?
-  type          String    @default("destaque") // destaque, missionario
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id])
+  classId   String
+  class     Class    @relation(fields: [classId], references: [id])
+  quarter   String
+  reason    String
+  date      DateTime @default(now())
+  photo     String?
+  type      String   @default("destaque") // destaque, missionario
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   @@map("quarter_highlights")
 }
 
 model Reward {
-  id            String    @id @default(cuid())
-  studentId     String
-  student       Student   @relation(fields: [studentId], references: [id])
-  quarter       String
-  description   String
-  delivered     Boolean   @default(false)
-  deliveryDate  DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
+  id           String    @id @default(cuid())
+  studentId    String
+  student      Student   @relation(fields: [studentId], references: [id])
+  quarter      String
+  description  String
+  delivered    Boolean   @default(false)
+  deliveryDate DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   @@map("rewards")
 }
 
 model Event {
-  id            String    @id @default(cuid())
-  title         String
-  description   String?
-  date          DateTime
-  endDate       DateTime?
-  type          String    @default("evento") // aula, evento, comemorativo, aniversario
-  allDay        Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  date        DateTime
+  endDate     DateTime?
+  type        String    @default("evento") // aula, evento, comemorativo, aniversario
+  allDay      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   @@map("events")
 }
 
 model Settings {
-  id            String    @id @default(cuid())
-  churchName    String    @default("Igreja")
-  logo          String?
+  id             String   @id @default(cuid())
+  churchName     String   @default("Igreja")
+  logo           String?
   currentQuarter String   @default("2026-Q1")
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   @@map("settings")
 }
 
 model Notification {
-  id          String   @id @default(cuid())
-  title       String
-  message     String   @db.Text
-  type        String   @default("info") // info, warning, birthday, success
-  userId      String?  // If null, it's global
-  senderId    String?  // Who sent the notification
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  expiresAt   DateTime?
-  
-  sender      User?    @relation("SentNotifications", fields: [senderId], references: [id])
-  reads       NotificationRead[]
-  
+  id        String    @id @default(cuid())
+  title     String
+  message   String    @db.Text
+  type      String    @default("info") // info, warning, birthday, success
+  userId    String? // If null, it's global
+  senderId  String? // Who sent the notification
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
+
+  sender User?              @relation("SentNotifications", fields: [senderId], references: [id])
+  reads  NotificationRead[]
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   @@map("notifications")
 }
 
@@ -306,7 +344,7 @@ model NotificationRead {
   notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
   userId         String
   readAt         DateTime     @default(now())
-  
+
   @@unique([notificationId, userId])
   @@map("notification_reads")
 }
@@ -324,7 +362,10 @@ model PhotoAlbum {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  photos      PhotoItem[]
+  photos PhotoItem[]
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
 
   @@map("photo_albums")
 }
@@ -354,6 +395,50 @@ model Material {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   @@map("materials")
 }
 
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships           OrganizationMembership[]
+  classes               Class[]
+  settings              Settings[]
+  students              Student[]
+  leaders               Leader[]
+  lessons               Lesson[]
+  attendanceRecords     AttendanceRecord[]
+  absenceJustifications AbsenceJustification[]
+  visitors              Visitor[]
+  quarterHighlights     QuarterHighlight[]
+  rewards               Reward[]
+  events                Event[]
+  notifications         Notification[]
+  photoAlbums           PhotoAlbum[]
+  materials             Material[]
+
+  @@map("organizations")
+}
+
+model OrganizationMembership {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           Role         @default(APOIO)
+  status         String       @default("ACTIVE")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([userId, organizationId])
+  @@map("organization_memberships")
+}
