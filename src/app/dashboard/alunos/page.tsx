@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageUpload } from "@/components/image-upload";
+import { useSession } from "next-auth/react";
 
 interface Student {
   id: string;
@@ -51,6 +52,10 @@ interface Class {
 }
 
 export default function AlunosPage() {
+  const { data: session } = useSession();
+  const userRole = (session?.user as any)?.role;
+  const canMutate = userRole === "ADMIN" || userRole === "DIRIGENTE";
+
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
@@ -176,9 +181,11 @@ export default function AlunosPage() {
             {students.length} alunos cadastrados • {students.filter(s => s.active).length} ativos
           </p>
         </div>
-        <Button onClick={openNewStudentDialog}>
-          <Plus className="h-4 w-4" /> Novo Aluno
-        </Button>
+        {canMutate && (
+          <Button onClick={openNewStudentDialog}>
+            <Plus className="h-4 w-4" /> Novo Aluno
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
@@ -253,12 +260,16 @@ export default function AlunosPage() {
                           <Eye className="h-4 w-4" />
                         </Button>
                       </Link>
-                      <Button variant="ghost" size="icon" title="Editar" onClick={() => openEditStudentDialog(s)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" title="Excluir" onClick={() => setDeleteConfirm(s.id)}>
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
+                      {canMutate && (
+                        <>
+                          <Button variant="ghost" size="icon" title="Editar" onClick={() => openEditStudentDialog(s)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" title="Excluir" onClick={() => setDeleteConfirm(s.id)}>
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

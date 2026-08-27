@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { useSession } from "next-auth/react";
 
 interface StudentDetail {
   id: string;
@@ -60,28 +61,17 @@ interface StudentDetail {
   }>;
 }
 
-export default function AlunoDetalhePage() {
-  const params = useParams();
-  const id = params.id as string;
-  const [student, setStudent] = useState<StudentDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchStudent() {
-      try {
-        const response = await fetch(`/api/students/${id}`);
-        const data = await response.json();
-        setStudent(data);
-      } catch (error) {
-        console.error("Erro ao buscar detalhes do aluno:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    if (id) fetchStudent();
-  }, [id]);
-
+export function AlunoDetalheView({
+  student,
+  loading,
+  errorStatus,
+  canMutate
+}: {
+  student: StudentDetail | null;
+  loading: boolean;
+  errorStatus: number | null;
+  canMutate: boolean;
+}) {
   if (loading) {
     return (
       <div className="h-[80vh] flex flex-col items-center justify-center gap-4 text-gray-500">
@@ -91,21 +81,18 @@ export default function AlunoDetalhePage() {
     );
   }
 
-  if (!student) {
+  if (errorStatus || !student) {
     return (
       <div className="h-[80vh] flex flex-col items-center justify-center gap-4">
-        <p className="text-gray-500 font-medium">Aluno não encontrado.</p>
+        <p className="text-gray-500 font-medium">
+          {errorStatus === 404 || !student ? "Aluno não encontrado." : "Erro inesperado ao carregar aluno."}
+        </p>
         <Link href="/dashboard/alunos">
-          <Button variant="outline">Voltar para a lista</Button>
+          <Button variant="outline">Voltar para Alunos</Button>
         </Link>
       </div>
     );
   }
-
-  // Preparar dados do gráfico (últimas 5 presenças para exemplo ou agregados)
-  const frequenciaData = [
-    { mes: "Total", presenca: student.stats.presencas, faltas: student.stats.faltas + student.stats.justificadas },
-  ];
 
   return (
     <div className="space-y-6 animate-fade-in pb-10">
@@ -129,7 +116,9 @@ export default function AlunoDetalhePage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="flex-1 sm:flex-none">Editar Perfil</Button>
+          {canMutate && (
+            <Button variant="outline" className="flex-1 sm:flex-none">Editar Perfil</Button>
+          )}
           <Button className="flex-1 sm:flex-none">Registrar Falta</Button>
         </div>
       </div>
@@ -336,6 +325,50 @@ export default function AlunoDetalhePage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function AlunoDetalhePage() {
+  const { data: session } = useSession();
+  const userRole = (session?.user as any)?.role;
+  const canMutate = userRole === "ADMIN" || userRole === "DIRIGENTE";
+
+  const params = useParams();
+  const id = params.id as string;
+  const [student, setStudent] = useState<StudentDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
+
+  useEffect(() => {
+    async function fetchStudent() {
+      try {
+        const response = await fetch(`/api/students/${id}`);
+        if (!response.ok) {
+          setErrorStatus(response.status);
+          setStudent(null);
+          return;
+        }
+        const data = await response.json();
+        setStudent(data);
+      } catch (error) {
+        console.error("Erro ao buscar detalhes do aluno:", error);
+        setErrorStatus(500);
+        setStudent(null);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    if (id) fetchStudent();
+  }, [id]);
+
+  return (
+    <AlunoDetalheView
+      student={student}
+      loading={loading}
+      errorStatus={errorStatus}
+      canMutate={canMutate}
+    />
   );
 }
 

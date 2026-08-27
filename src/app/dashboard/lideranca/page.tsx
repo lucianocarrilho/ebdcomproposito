@@ -54,6 +54,9 @@ interface AttendanceItem {
 
 export default function LiderancaPage() {
   const { data: session } = useSession();
+  const userRole = (session?.user as any)?.role;
+  const canMutate = userRole === "ADMIN" || userRole === "DIRIGENTE";
+
   const [activeTab, setActiveTab] = useState<"quadro" | "presenca">("quadro");
   const [leaders, setLeaders] = useState<Leader[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
@@ -305,9 +308,11 @@ export default function LiderancaPage() {
                 <SelectItem value="Professor">Professor</SelectItem>
               </SelectContent>
             </Select>
-            <Button onClick={() => { setEditingLeader(null); setPhotoUrl(""); setIsDialogOpen(true); }} className="shadow-lg shadow-primary/20 rounded-xl ml-auto">
-              <Plus className="h-4 w-4 mr-2" /> Novo Líder
-            </Button>
+            {canMutate && (
+              <Button onClick={() => { setEditingLeader(null); setPhotoUrl(""); setSelectedRole("Professor"); setSelectedClass("none"); setIsDialogOpen(true); }} className="shadow-lg shadow-primary/20 rounded-xl ml-auto">
+                <Plus className="h-4 w-4 mr-2" /> Novo Líder
+              </Button>
+            )}
           </div>
 
           <Card className="rounded-2xl border-gray-100 shadow-sm overflow-hidden">
@@ -351,13 +356,15 @@ export default function LiderancaPage() {
                         <Button variant="ghost" size="icon" title="Ver Histórico" className="h-8 w-8 text-indigo-400 hover:text-indigo-600" onClick={() => openHistory(l)}>
                           <FileText className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-primary" onClick={() => { setEditingLeader(l); setPhotoUrl(l.photo || ""); setIsDialogOpen(true); }}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        {((session?.user as any)?.role !== "APOIO") && (
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-red-500" onClick={() => setDeleteConfirm(l.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                        {canMutate && (
+                          <>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-primary" onClick={() => { setEditingLeader(l); setPhotoUrl(l.photo || ""); setSelectedRole(l.role); setSelectedClass(l.classId || "none"); setIsDialogOpen(true); }}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-red-500" onClick={() => setDeleteConfirm(l.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
                         )}
                       </div>
                     </TableCell>
