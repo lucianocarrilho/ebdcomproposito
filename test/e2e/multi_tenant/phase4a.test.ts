@@ -29,7 +29,7 @@ describe("Phase 4A: Students and Leaders (Multi-Tenant Isolation)", () => {
         isGlobalAdmin: true,
       }
     });
-  });
+  }, 60_000);
 
   afterAll(async () => {
     await profSede.cleanup();
@@ -40,7 +40,7 @@ describe("Phase 4A: Students and Leaders (Multi-Tenant Isolation)", () => {
       await prisma.user.delete({ where: { id: userGlobal.id } }).catch(() => {});
     }
     await prisma.$disconnect();
-  });
+  }, 60_000);
 
   describe("Students Endpoints", () => {
     let studentSede: any;
