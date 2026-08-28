@@ -23,6 +23,11 @@ enum AttendanceStatus {
   VISITANTE
 }
 
+enum ClassAssignmentRole {
+  PROFESSOR
+  AUXILIAR
+}
+
 model User {
   id                String                   @id @default(cuid())
   name              String
@@ -66,9 +71,12 @@ model Class {
   photoAlbums       PhotoAlbum[]
   materials         Material[]
 
+  classStaffAssignments ClassStaffAssignment[]
+
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
 
+  @@unique([id, organizationId], map: "classes_id_org_key")
   @@map("classes")
 }
 
@@ -439,6 +447,29 @@ model OrganizationMembership {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
+  classStaffAssignments ClassStaffAssignment[]
+
   @@unique([userId, organizationId])
+  @@unique([id, organizationId], map: "memberships_id_org_key")
   @@map("organization_memberships")
+}
+
+model ClassStaffAssignment {
+  id                       String              @id @default(cuid())
+  organizationId           String
+  classId                  String
+  organizationMembershipId String
+  assignmentRole           ClassAssignmentRole @default(PROFESSOR)
+  active                   Boolean             @default(true)
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+
+  class Class @relation(fields: [classId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade, map: "csa_class_org_fkey")
+
+  membership OrganizationMembership @relation(fields: [organizationMembershipId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade, map: "csa_membership_org_fkey")
+
+  @@unique([classId, organizationMembershipId], map: "csa_class_membership_key")
+  @@index([organizationId, active], map: "csa_org_active_idx")
+  @@index([organizationMembershipId, organizationId, active], map: "csa_member_org_active_idx")
+  @@map("class_staff_assignments")
 }
