@@ -40,9 +40,19 @@ async function main() {
     { name: "Mulheres", description: "Classe para mulheres adultas", audience: "Adultas Mulheres" },
   ];
 
+  // Organization
+  const org = await prisma.organization.upsert({
+    where: { slug: "sede-principal" },
+    update: { name: "Sede Principal" },
+    create: {
+      name: "Sede Principal",
+      slug: "sede-principal",
+    },
+  });
+
   const classes = [];
   for (const cls of classesData) {
-    const created = await prisma.class.create({ data: cls });
+    const created = await prisma.class.create({ data: { ...cls, organizationId: org.id } });
     classes.push(created);
   }
   console.log(`📚 ${classes.length} classes criadas`);

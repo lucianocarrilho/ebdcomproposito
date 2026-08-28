@@ -30,3 +30,10 @@ Conforme estabelecido pela segurança técnica, confirmamos categoricamente os 4
 - `npx tsc --noEmit`: Ok.
 - `npx prisma validate`: Ok.
 - Nenhuma alteração foi promovida a `dev`, `ebd2026`, produção ou `main`.
+
+---
+## Adendo Corretivo (Fase S1b)
+- A versão inicial da S1 comprovava cascata de `Class` e `Membership`.
+- Contudo, **não** comprovava exclusão direta de `Organization`.
+- A auditoria da fase S1b encontrou Classes nulas órfãs provenientes de fixtures antigas.
+- A fase **S1b** corrigiu definitivamente a integridade estrutural alterando o schema Prisma e o MySQL para impor o campo como `NOT NULL` e com a Foreign Key restrita a `ON DELETE RESTRICT`. A integridade multi-tenant está garantida.

@@ -133,9 +133,10 @@ export async function setupTestUserAndLogin(orgName: string, role: string = "ADM
     testId,
     cleanup: async () => {
       // Limpeza controlada
+      await prisma.classStaffAssignment.deleteMany({ where: { organizationId: org.id } });
       await prisma.student.deleteMany({ where: { organizationId: org.id } });
       await prisma.leader.deleteMany({ where: { organizationId: org.id } });
-      await prisma.class.deleteMany({ where: { id: classObj.id } });
+      await prisma.class.deleteMany({ where: { organizationId: org.id } });
       await prisma.organizationMembership.deleteMany({ where: { organizationId: org.id } });
       await prisma.organization.delete({ where: { id: org.id } });
       await prisma.user.delete({ where: { id: user.id } });

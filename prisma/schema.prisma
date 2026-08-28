@@ -73,8 +73,8 @@ model Class {
 
   classStaffAssignments ClassStaffAssignment[]
 
-  organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id])
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "classes_organizationId_fkey")
 
   @@unique([id, organizationId], map: "classes_id_org_key")
   @@map("classes")
