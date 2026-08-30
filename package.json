@@ -7,7 +7,9 @@
     "build": "npx prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "cross-env NODE_ENV=test vitest run",
+    "test": "npm run test:s2 && npm run test:app",
+    "test:s2": "cross-env NODE_ENV=test vitest run --config vitest.s2.config.ts",
+    "test:app": "cross-env NODE_ENV=test vitest run --config vitest.app.config.ts",
     "test:watch": "cross-env NODE_ENV=test vitest",
     "deploy": "echo \"DEPLOY: Apenas faça 'git push'. O projeto está hospedado na Vercel e o GitHub já realiza o deploy automaticamente. (O DB fica na Hostinger)\""
   },
@@ -59,6 +61,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
+    "tsx": "4.23.12",
     "typescript": "^5",
     "vitest": "^4.1.11"
   }
