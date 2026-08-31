@@ -34,14 +34,24 @@ export async function requireOrganization(isApi = false) {
     redirect("/select-organization");
   }
 
-  let orgRole = null;
+  let membership: any = null;
+  let orgRole: any = null;
   let globalAdminMode = false;
 
   if (user.isGlobalAdmin && user.globalAdminMode) {
     globalAdminMode = true;
     orgRole = "ADMIN"; // Virtual role for operations
+    // Global Admin might also have a real membership in the active organization
+    membership = await prisma.organizationMembership.findUnique({
+      where: {
+        userId_organizationId: {
+          userId: user.id,
+          organizationId: user.activeOrganizationId
+        }
+      }
+    });
   } else {
-    const membership = await prisma.organizationMembership.findUnique({
+    membership = await prisma.organizationMembership.findUnique({
       where: {
         userId_organizationId: {
           userId: user.id,
@@ -62,8 +72,57 @@ export async function requireOrganization(isApi = false) {
     user,
     activeOrganizationId: user.activeOrganizationId,
     orgRole,
+    membership,
     isGlobalAdmin: user.isGlobalAdmin,
     globalAdminMode
+  };
+}
+
+export interface AssignedClassResult {
+  classIds: string[];
+  assignments: {
+    classId: string;
+    assignmentRole: "PROFESSOR" | "AUXILIAR";
+  }[];
+}
+
+/**
+ * Consulta autorizada de turmas atribuídas via ClassStaffAssignment.
+ * Valida simultaneamente a integridade da Membership e a ativação da atribuição.
+ */
+export async function getUserAssignedClasses(
+  userId: string,
+  activeOrganizationId: string,
+  organizationMembershipId: string
+): Promise<AssignedClassResult> {
+  if (!userId || !activeOrganizationId || !organizationMembershipId) {
+    return { classIds: [], assignments: [] };
+  }
+
+  const assignments = await prisma.classStaffAssignment.findMany({
+    where: {
+      organizationId: activeOrganizationId,
+      organizationMembershipId: organizationMembershipId,
+      active: true,
+      membership: {
+        id: organizationMembershipId,
+        userId: userId,
+        organizationId: activeOrganizationId,
+        status: "ACTIVE"
+      }
+    },
+    select: {
+      classId: true,
+      assignmentRole: true
+    }
+  });
+
+  return {
+    classIds: assignments.map((a) => a.classId),
+    assignments: assignments.map((a) => ({
+      classId: a.classId,
+      assignmentRole: a.assignmentRole as "PROFESSOR" | "AUXILIAR"
+    }))
   };
 }
 

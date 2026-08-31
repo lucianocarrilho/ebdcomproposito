@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireOrganization } from "@/lib/permissions";
+import { requireOrganization, getUserAssignedClasses } from "@/lib/permissions";
 import { NextRequest, NextResponse } from "next/server";
 
 // GET - Listar classes
@@ -10,19 +10,31 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: authResult.error }, { status: authResult.status });
     }
     
-    const { activeOrganizationId, orgRole, user } = authResult as any;
-    const userName = user.name || "";
+    const { activeOrganizationId, orgRole, user, membership, globalAdminMode } = authResult as any;
 
     const where: any = {
-      organizationId: activeOrganizationId
+      organizationId: activeOrganizationId,
+      status: true
     };
     
-    if (orgRole === "PROFESSOR") {
-      where.OR = [
-        { id: user.classId || undefined },
-        { professor: { contains: userName } }
-      ];
+    // Full access roles for the active organization
+    const hasFullAccess = globalAdminMode || orgRole === "ADMIN" || orgRole === "DIRIGENTE" || orgRole === "VICE_DIRIGENTE";
+
+    if (!hasFullAccess) {
+      // Restricted roles (PROFESSOR, APOIO) require active CSA assignments
+      if (!membership?.id) {
+        return NextResponse.json([]);
+      }
+
+      const { classIds } = await getUserAssignedClasses(user.id, activeOrganizationId, membership.id);
+
+      if (!classIds || classIds.length === 0) {
+        return NextResponse.json([]);
+      }
+
+      where.id = { in: classIds };
     }
+
 
     const classes = await prisma.class.findMany({
       where,
