@@ -575,6 +575,17 @@ async function run() {
         throw new Error('PENDING_FINGERPRINT_MISMATCH: Fingerprint relido do disco não é idêntico ao plano em memória');
       }
 
+      // Controlled test fault injection: after pending journal is written, re-read and validated, but BEFORE DB transaction starts
+      if (
+        process.env.NODE_ENV === 'test' &&
+        dbName === ALLOWED_WRITE_DB &&
+        process.env.S2_TEST_FAIL_AFTER_PENDING_BEFORE_TRANSACTION === '1'
+      ) {
+        console.error('TEST_STOP_AFTER_PENDING_BEFORE_TRANSACTION: Journal .pending escrito e validado antes da transação DB.');
+        console.error(`O journal .pending foi PRESERVADO em: ${pendingPathResolved}`);
+        process.exit(1);
+      }
+
       // Step 2: Serializable Transaction in Prisma using pre-generated IDs & timestamps from journal
       try {
         await prisma.$transaction(
@@ -659,6 +670,18 @@ async function run() {
       }
 
       // Step 3: Transaction committed. Promote journal to final receipt via .tmp + rename
+      if (
+        process.env.NODE_ENV === 'test' &&
+        dbName === ALLOWED_WRITE_DB &&
+        process.env.S2_TEST_FAIL_AFTER_COMMIT === '1'
+      ) {
+        console.error('RECOVERY_REQUIRED: Falha na gravação do recibo após commit.');
+        console.error('IDs de ClassStaffAssignment criados:', createdAssignments.map((a) => a.id).join(', '));
+        console.error(`O journal .pending foi PRESERVADO em: ${pendingPathResolved}`);
+        console.error(`Execute recuperação com: --recover-pending="${pendingPathResolved}" --checksum=${computeChecksum(pendingJson)}`);
+        process.exit(1);
+      }
+
       const receipt: ApplyReceipt = {
         receiptVersion: '1.0',
         runId: manifest.runId,
