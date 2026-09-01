@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { requireOrganization, getUserAssignedClasses } from "@/lib/permissions";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -7,46 +8,94 @@ export const dynamic = "force-dynamic";
 // GET - Listar lições
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    const authResult = await requireOrganization(true);
+    if ('error' in authResult) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
     }
 
-    const userRole = (session.user as any).role;
-    const userClassId = (session.user as any).classId;
-    const userName = session.user?.name || "";
+    const { activeOrganizationId, orgRole, membership, user, globalAdminMode } = authResult as any;
+
+    const fullAccessRoles = ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE"];
+    const isManager = globalAdminMode || fullAccessRoles.includes(orgRole);
+    const isRestricted = orgRole === "PROFESSOR" || orgRole === "APOIO";
+
+    if (!isManager && !isRestricted) {
+      return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
+    }
 
     const { searchParams } = new URL(request.url);
     const quarter = searchParams.get("quarter") || "2026-Q2";
     const category = searchParams.get("category");
 
-    const where: Record<string, unknown> = { quarter };
+    const where: any = { quarter };
 
-    // Enforcement: Professors only see lessons for categories they teach
-    if (userRole === "PROFESSOR") {
-      const teacherClasses = await prisma.class.findMany({
-        where: {
+    if (isManager) {
+      where.OR = [
+        {
+          organizationId: activeOrganizationId,
           OR: [
-            { id: userClassId || undefined },
-            { professor: { contains: userName } }
+            { classId: null },
+            { class: { organizationId: activeOrganizationId } }
           ]
         },
-        select: { name: true }
-      });
-      
-      const allowedCategories = teacherClasses.map(cls => cls.name);
+        {
+          organizationId: null,
+          classId: null
+        }
+      ];
 
       if (category) {
-        // Permitir a categoria se ela bater com o nome da classe do professor
-        if (!allowedCategories.includes(category)) {
-          return NextResponse.json([]); // Return empty if category not allowed
-        }
         where.category = category;
-      } else {
-        where.category = { in: allowedCategories };
       }
-    } else if (category) {
-      where.category = category;
+    } else {
+      if (!membership?.id) {
+        return NextResponse.json([]);
+      }
+
+      const { classIds } = await getUserAssignedClasses(user.id, activeOrganizationId, membership.id);
+
+      if (!classIds || classIds.length === 0) {
+        return NextResponse.json([]);
+      }
+
+      const activeClasses = await prisma.class.findMany({
+        where: {
+          id: { in: classIds },
+          organizationId: activeOrganizationId,
+          status: true
+        },
+        select: { id: true, name: true }
+      });
+
+      if (activeClasses.length === 0) {
+        return NextResponse.json([]);
+      }
+
+      const assignedClassIds = activeClasses.map(c => c.id);
+      const allowedCategories = activeClasses.map(c => c.name);
+
+      if (category && !allowedCategories.includes(category)) {
+        return NextResponse.json([]);
+      }
+
+      const targetCategories = category ? [category] : allowedCategories;
+
+      where.OR = [
+        {
+          organizationId: activeOrganizationId,
+          classId: { in: assignedClassIds }
+        },
+        {
+          organizationId: activeOrganizationId,
+          classId: null,
+          category: { in: targetCategories }
+        },
+        {
+          organizationId: null,
+          classId: null,
+          category: { in: targetCategories }
+        }
+      ];
     }
 
     const lessons = await prisma.lesson.findMany({

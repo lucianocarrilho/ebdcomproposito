@@ -13,7 +13,8 @@ export default defineConfig({
     include: [
       'test/e2e/multi_tenant/isolation.test.ts',
       'test/e2e/multi_tenant/s1_isolation.test.ts',
-      'test/e2e/multi_tenant/s3a_csa_reads.test.ts'
+      'test/e2e/multi_tenant/s3a_csa_reads.test.ts',
+      'test/e2e/multi_tenant/s3a2_legacy_reads.test.ts'
     ],
     exclude: ['test/e2e/multi_tenant/s2_backfill.test.ts'],
     globalSetup: ['./test/global_setup.ts'],

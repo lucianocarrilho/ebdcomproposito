@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { requireOrganization, getUserAssignedClasses } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -8,24 +9,44 @@ export const dynamic = "force-dynamic";
 // Retrieves active notifications for the current user and check for upcoming birthdays
 export async function GET(req: Request) {
   try {
-    const session = await auth();
-    if (!session || !session.user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    const authResult = await requireOrganization(true);
+    if ('error' in authResult) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    }
 
-    const userId = (session.user as any).id;
-    const userRole = (session?.user as any)?.role;
-    const userClassId = (session?.user as any)?.classId;
+    const { activeOrganizationId, orgRole, membership, user, globalAdminMode } = authResult as any;
+
+    const fullAccessRoles = ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE"];
+    const isManager = globalAdminMode || fullAccessRoles.includes(orgRole);
+    const isRestricted = orgRole === "PROFESSOR" || orgRole === "APOIO";
+
+    if (!isManager && !isRestricted) {
+      return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
+    }
+
+    const userId = user.id;
+    const now = new Date();
 
     // 1. Fetch Global or Targeted Notifications
     const dbNotifications = await prisma.notification.findMany({
       where: {
         active: true,
-        OR: [
-          { userId: null }, // Global broadcast
-          { userId: userId } // Personal alert
-        ],
-        expiresAt: {
-          gt: new Date()
-        }
+        AND: [
+          {
+            OR: [
+              { organizationId: activeOrganizationId, userId: null },
+              { organizationId: activeOrganizationId, userId: userId },
+              { organizationId: null, userId: null },
+              { organizationId: null, userId: userId }
+            ]
+          },
+          {
+            OR: [
+              { expiresAt: null },
+              { expiresAt: { gt: now } }
+            ]
+          }
+        ]
       },
       include: {
         reads: {
@@ -41,14 +62,50 @@ export async function GET(req: Request) {
 
     const birthdayNotifications: any[] = [];
     const today = new Date();
-    
-    try {
-      // We check students from current professor's class or all if admin
-      const studentsWhere = userRole === "ADMIN" || userRole === "DIRIGENTE" 
-        ? { active: true } 
-        : { active: true, classId: userClassId };
 
-      if (userRole === "ADMIN" || userRole === "DIRIGENTE" || userClassId) {
+    try {
+      let canCheckBirthdays = false;
+      let studentsWhere: any = null;
+
+      if (isManager) {
+        canCheckBirthdays = true;
+        studentsWhere = {
+          active: true,
+          organizationId: activeOrganizationId,
+          class: {
+            organizationId: activeOrganizationId,
+            status: true
+          }
+        };
+      } else if (isRestricted && membership?.id) {
+        const { classIds } = await getUserAssignedClasses(userId, activeOrganizationId, membership.id);
+        if (classIds && classIds.length > 0) {
+          const activeClasses = await prisma.class.findMany({
+            where: {
+              id: { in: classIds },
+              organizationId: activeOrganizationId,
+              status: true
+            },
+            select: { id: true }
+          });
+
+          const assignedClassIds = activeClasses.map(c => c.id);
+          if (assignedClassIds.length > 0) {
+            canCheckBirthdays = true;
+            studentsWhere = {
+              active: true,
+              organizationId: activeOrganizationId,
+              classId: { in: assignedClassIds },
+              class: {
+                organizationId: activeOrganizationId,
+                status: true
+              }
+            };
+          }
+        }
+      }
+
+      if (canCheckBirthdays && studentsWhere) {
         const allStudents = await prisma.student.findMany({
           where: studentsWhere,
           select: { id: true, name: true, birthDate: true, class: { select: { name: true } } }
@@ -56,17 +113,16 @@ export async function GET(req: Request) {
 
         allStudents.forEach(s => {
           if (!s.birthDate) return;
-          
+
           const bday = new Date(s.birthDate);
           const bdayThisYear = new Date(today.getFullYear(), bday.getMonth(), bday.getDate());
-          
-          // If bday already passed this year, check next year
+
           if (bdayThisYear < today && (today.getMonth() === 11 && bday.getMonth() === 0)) {
-             bdayThisYear.setFullYear(today.getFullYear() + 1);
+            bdayThisYear.setFullYear(today.getFullYear() + 1);
           }
 
           const diffDays = Math.ceil((bdayThisYear.getTime() - today.getTime()) / (1000 * 3600 * 24));
-          
+
           if (diffDays >= 0 && diffDays <= 7) {
             birthdayNotifications.push({
               id: `bday-${s.id}`,
@@ -81,21 +137,19 @@ export async function GET(req: Request) {
       }
     } catch (bdayError) {
       console.error("Erro ao processar aniversariantes:", bdayError);
-      // We continue with empty birthdays but keep coordination notices
     }
 
-    // Combine and format
     const finalNotifications = [
-       ...birthdayNotifications,
-       ...dbNotifications.map(n => ({
-          id: n.id,
-          title: n.title,
-          message: n.message,
-          type: n.type,
-          createdAt: n.createdAt,
-          isRead: n.reads.length > 0,
-          senderName: (n as any).sender?.name || "Coordenação"
-       }))
+      ...birthdayNotifications,
+      ...dbNotifications.map(n => ({
+        id: n.id,
+        title: n.title,
+        message: n.message,
+        type: n.type,
+        createdAt: n.createdAt,
+        isRead: n.reads.length > 0,
+        senderName: (n as any).sender?.name || "Coordenação"
+      }))
     ];
 
     return NextResponse.json(finalNotifications);
@@ -110,7 +164,7 @@ export async function POST(req: Request) {
   try {
     const session = await auth();
     if (!session || (session.user as any).role === "PROFESSOR") {
-       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
 
     const { title, message, type, expiresAt, targetUserId } = await req.json();
@@ -122,7 +176,7 @@ export async function POST(req: Request) {
         type: type || "info",
         userId: targetUserId || null,
         senderId: (session.user as any).id,
-        expiresAt: expiresAt ? new Date(expiresAt) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days default
+        expiresAt: expiresAt ? new Date(expiresAt) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
       }
     });
 
