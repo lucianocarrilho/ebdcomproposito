@@ -1,11 +1,16 @@
-import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import { AttendanceStatus } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/permissions";
+import { requireOrganization } from "@/lib/organization-guard";
 
-// GET - Buscar chamada por data e classe
-export async function GET(request: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
+    const authResult = await requireAuth(req);
+    if (!authResult.authorized) {
+      return authResult.response;
+    }
+
+    const { searchParams } = new URL(req.url);
     const classId = searchParams.get("classId");
     const date = searchParams.get("date");
 
@@ -16,143 +21,261 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const parsedDate = new Date(date + "T00:00:00.000Z");
+    // Usar Date em UTC para evitar discrepâncias de fuso horário
+    const targetDate = new Date(`${date}T00:00:00.000Z`);
 
-    // Get existing record
-    const record = await prisma.attendanceRecord.findUnique({
+    const record = await prisma.attendanceRecord.findFirst({
       where: {
-        date_classId: { date: parsedDate, classId },
+        classId,
+        date: targetDate,
       },
       include: {
-        items: {
-          include: { student: { select: { id: true, name: true, photo: true } } },
-        },
+        items: true,
       },
     });
 
-    // Get all students for the class
-    const students = await prisma.student.findMany({
-      where: { classId, active: true },
-      select: { id: true, name: true, photo: true },
-      orderBy: { name: "asc" },
-    });
+    if (!record) {
+      return NextResponse.json(null);
+    }
 
-    // Merge data
-    const attendanceList = students.map((student) => {
-      const item = record?.items.find((i) => i.studentId === student.id);
-      return {
-        studentId: student.id,
-        studentName: student.name,
-        photo: student.photo || null,
-        status: item?.status || "",
-        observations: item?.observations || "",
-      };
-    });
-
-    return NextResponse.json({
-      record: record ? {
-        ...record,
-        biblias: record.biblias || 0,
-        revistas: record.revistas || 0,
-        ofertas: record.ofertas ? Number(record.ofertas) : 0,
-        outros: record.outros || 0,
-      } : null,
-      students: attendanceList,
-    });
+    return NextResponse.json(record);
   } catch (error) {
     console.error("Erro ao buscar presença:", error);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Erro interno ao buscar presença" },
+      { status: 500 }
+    );
   }
 }
 
-// POST - Salvar chamada
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const body = await request.json();
-    const { classId, date, observations, items, biblias, revistas, ofertas, outros } = body;
+    const authResult = await requireAuth(req);
+    if (!authResult.authorized) {
+      return authResult.response;
+    }
+    const session = authResult.session;
 
-    if (!classId || !date || !items?.length) {
+    const orgResult = await requireOrganization(req, {
+      requireActiveOrg: true,
+      allowGlobalAdminFallback: false,
+    });
+
+    if (!orgResult.authorized) {
+      return orgResult.response;
+    }
+
+    const { organizationId, isGlobalAdmin } = orgResult;
+
+    const membership = await prisma.organizationMembership.findFirst({
+      where: {
+        userId: session.user.id,
+        organizationId: organizationId!,
+        status: "ACTIVE",
+      },
+    });
+
+    if (!membership && !isGlobalAdmin) {
       return NextResponse.json(
-        { error: "Dados incompletos" },
+        { error: "Acesso negado: Membro inativo ou não pertencente a esta organização" },
+        { status: 403 }
+      );
+    }
+
+    const orgRole = membership?.role || (isGlobalAdmin ? "ADMIN" : null);
+
+    const body = await req.json();
+
+    if ("organizationId" in body || "senderId" in body || "registeredById" in body) {
+      return NextResponse.json(
+        { error: "Campos controlados pelo servidor não podem ser enviados pelo cliente" },
         { status: 400 }
       );
     }
 
-    const parsedDate = new Date(date + "T00:00:00.000Z");
+    const { classId, date, observations, biblias, revistas, ofertas, outros, items } = body;
 
-    // Upsert the record
-    const record = await prisma.attendanceRecord.upsert({
-      where: {
-        date_classId: { date: parsedDate, classId },
-      },
-      create: {
-        date: parsedDate,
-        classId,
-        observations,
-        biblias: biblias || 0,
-        revistas: revistas || 0,
-        ofertas: ofertas || 0,
-        outros: outros || 0,
-      },
-      update: {
-        observations,
-        biblias: biblias || 0,
-        revistas: revistas || 0,
-        ofertas: ofertas || 0,
-        outros: outros || 0,
-      },
-    });
-
-    // Delete existing items and recreate
-    await prisma.attendanceItem.deleteMany({
-      where: { recordId: record.id },
-    });
-
-    // Create attendance items
-    const validItems = items.filter(
-      (item: { status: string }) => item.status && item.status !== ""
-    );
-
-    if (validItems.length > 0) {
-      await prisma.attendanceItem.createMany({
-        data: validItems.map((item: { studentId: string; status: AttendanceStatus; observations?: string }) => ({
-          recordId: record.id,
-          studentId: item.studentId,
-          status: item.status,
-          observations: item.observations || null,
-        })),
-      });
+    if (!classId || !date || !Array.isArray(items)) {
+      return NextResponse.json(
+        { error: "classId, date e items são obrigatórios" },
+        { status: 400 }
+      );
     }
 
-    // Also update justifications for FALTA_JUSTIFICADA
-    // (auto-create justification records)
-    const justifiedItems = validItems.filter(
-      (item: { status: string }) => item.status === "FALTA_JUSTIFICADA"
-    );
+    const targetDate = new Date(`${date}T00:00:00.000Z`);
+    if (isNaN(targetDate.getTime())) {
+      return NextResponse.json(
+        { error: "Data inválida" },
+        { status: 400 }
+      );
+    }
 
-    for (const item of justifiedItems) {
-      // Verificar se já existe justificativa para este aluno nesta data
-      const existing = await prisma.absenceJustification.findFirst({
+    const targetClass = await prisma.class.findFirst({
+      where: {
+        id: classId,
+        organizationId: organizationId!,
+      },
+    });
+
+    if (!targetClass) {
+      return NextResponse.json(
+        { error: "Turma não encontrada nesta organização" },
+        { status: 404 }
+      );
+    }
+
+    if (orgRole === "PROFESSOR" || orgRole === "APOIO") {
+      if (!membership) {
+        return NextResponse.json(
+          { error: "Acesso negado: Membership não encontrada" },
+          { status: 403 }
+        );
+      }
+
+      const csa = await prisma.classStaffAssignment.findFirst({
         where: {
-          studentId: item.studentId,
-          date: parsedDate,
+          organizationMembershipId: membership.id,
+          classId,
+          organizationId: organizationId!,
+          active: true,
         },
       });
 
-      if (!existing) {
-        await prisma.absenceJustification.create({
+      if (!csa) {
+        return NextResponse.json(
+          { error: "Acesso negado: Turma não atribuída a este usuário" },
+          { status: 403 }
+        );
+      }
+    } else if (orgRole !== "ADMIN" && orgRole !== "DIRIGENTE" && orgRole !== "VICE_DIRIGENTE") {
+      return NextResponse.json(
+        { error: "Acesso negado: Cargo sem permissão para registrar chamada" },
+        { status: 403 }
+      );
+    }
+
+    const studentIds = items.map((i: any) => i.studentId);
+    const uniqueStudentIds = new Set(studentIds);
+
+    if (studentIds.length !== uniqueStudentIds.size) {
+      return NextResponse.json(
+        { error: "Lista de presença contém estudantes duplicados" },
+        { status: 400 }
+      );
+    }
+
+    if (studentIds.length > 0) {
+      const validStudentsCount = await prisma.student.count({
+        where: {
+          id: { in: studentIds },
+          classId,
+          organizationId: organizationId!,
+        },
+      });
+
+      if (validStudentsCount !== studentIds.length) {
+        return NextResponse.json(
+          { error: "Um ou mais estudantes não pertencem a esta turma e organização" },
+          { status: 404 }
+        );
+      }
+    }
+
+    const record = await prisma.$transaction(async (tx) => {
+      let rec = await tx.attendanceRecord.findFirst({
+        where: {
+          classId,
+          date: targetDate,
+        },
+      });
+
+      if (rec) {
+        rec = await tx.attendanceRecord.update({
+          where: { id: rec.id },
           data: {
-            studentId: item.studentId,
-            date: parsedDate,
-            reason: "Falta justificada via chamada",
+            observations,
+            biblias: biblias !== undefined ? Number(biblias) : undefined,
+            revistas: revistas !== undefined ? Number(revistas) : undefined,
+            ofertas: ofertas !== undefined ? Number(ofertas) : undefined,
+            outros: outros !== undefined ? Number(outros) : undefined,
+            organizationId: organizationId!,
+          },
+        });
+
+        await tx.attendanceItem.deleteMany({
+          where: { recordId: rec.id },
+        });
+      } else {
+        rec = await tx.attendanceRecord.create({
+          data: {
+            classId,
+            date: targetDate,
+            observations,
+            biblias: biblias !== undefined ? Number(biblias) : 0,
+            revistas: revistas !== undefined ? Number(revistas) : 0,
+            ofertas: ofertas !== undefined ? Number(ofertas) : 0,
+            outros: outros !== undefined ? Number(outros) : 0,
+            organizationId: organizationId!,
           },
         });
       }
-    }
+
+      if (items.length > 0) {
+        await tx.attendanceItem.createMany({
+          data: items.map((item: any) => ({
+            recordId: rec.id,
+            studentId: item.studentId,
+            status: item.status,
+            observations: item.observations || null,
+          })),
+        });
+
+        for (const item of items) {
+          if (item.status === "FALTA_JUSTIFICADA") {
+            const reasonText = item.observations || "Falta Justificada registrada na chamada";
+
+            const existingJust = await tx.absenceJustification.findFirst({
+              where: {
+                studentId: item.studentId,
+                date: targetDate,
+                organizationId: organizationId!,
+              },
+            });
+
+            if (existingJust) {
+              await tx.absenceJustification.update({
+                where: { id: existingJust.id },
+                data: {
+                  reason: reasonText,
+                  observations: item.observations || null,
+                  registeredById: session.user.id,
+                },
+              });
+            } else {
+              await tx.absenceJustification.create({
+                data: {
+                  studentId: item.studentId,
+                  date: targetDate,
+                  reason: reasonText,
+                  observations: item.observations || null,
+                  organizationId: organizationId!,
+                  registeredById: session.user.id,
+                },
+              });
+            }
+          }
+        }
+      }
+
+      return rec;
+    });
 
     return NextResponse.json({ success: true, recordId: record.id });
   } catch (error) {
     console.error("Erro ao salvar presença:", error);
-    return NextResponse.json({ error: "Erro ao salvar" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Erro interno ao salvar presença" },
+      { status: 500 }
+    );
   }
 }

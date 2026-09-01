@@ -1,85 +1,154 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/lib/permissions';
+import { requireOrganization } from '@/lib/organization-guard';
 
-export const dynamic = "force-dynamic";
-
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session || !session.user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    const authResult = await requireAuth(req);
+    if (!authResult.authorized) {
+      return authResult.response;
+    }
+    const session = authResult.session;
 
-    const userId = (session.user as any).id;
-    const userRole = (session.user as any).role;
-
-    // 1. Fetch notifications (completely separate call)
-    const notifications = await prisma.notification.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 50
+    // Lógica Multi-tenant isolada (S3A.2)
+    const orgResult = await requireOrganization(req, {
+      requireActiveOrg: false,
+      allowGlobalAdminFallback: false,
     });
 
-    if (!notifications || notifications.length === 0) return NextResponse.json([]);
+    if (!orgResult.authorized) {
+      return orgResult.response;
+    }
 
-    // 2. Fetch all reads for these notifications
-    const notificationIds = notifications.map(n => n.id);
-    const allReads = await prisma.notificationRead.findMany({
-      where: {
-        notificationId: { in: notificationIds }
-      }
-    });
+    const { organizationId, isGlobalAdmin, activeOrgId } = orgResult;
 
-    // 3. Fetch users involved
-    const userIds = Array.from(new Set(allReads.map(r => r.userId)));
-    const allUsers = await prisma.user.findMany({
-      where: { id: { in: userIds } },
-      select: { id: true, name: true }
-    });
+    // Se o usuário tiver um activeOrganizationId ou organização resolvida via guard
+    if (organizationId || activeOrgId) {
+      const targetOrgId = organizationId || activeOrgId;
 
-    // 4. Assemble the final data manual to avoid Prisma "Unknown field" errors on joins
-    const formatted = notifications.map(notif => {
-      const readsForNotif = allReads.filter(r => r.notificationId === notif.id);
-      
-      return {
-        ...notif,
-        _count: {
-          reads: readsForNotif.length
+      // Buscar membership ativa do usuário para determinar seu pertencimento à organização
+      const membership = await prisma.organizationMembership.findFirst({
+        where: {
+          userId: session.user.id,
+          organizationId: targetOrgId,
+          status: "ACTIVE",
         },
-        reads: readsForNotif.map(r => {
-          const user = allUsers.find(u => u.id === r.userId);
-          return {
-            user: { name: user?.name || "Usuário" }
-          };
-        }).slice(0, 50)
-      };
+      });
+
+      // Se não possui membership ativa e não é Global Admin, 403 Forbidden
+      if (!membership && !isGlobalAdmin) {
+        return NextResponse.json(
+          { error: "Acesso negado: Usuário não é membro ativo desta organização" },
+          { status: 403 }
+        );
+      }
+
+      // Buscar notificações enviadas pelo usuário nesta organização
+      const sentNotifications = await prisma.notification.findMany({
+        where: {
+          senderId: session.user.id,
+          organizationId: targetOrgId,
+        },
+        include: {
+          reads: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      return NextResponse.json(sentNotifications);
+    }
+
+    // Comportamento Legacy (Sem organização ativa e sem header x-organization-id)
+    const sentNotifications = await prisma.notification.findMany({
+      where: {
+        senderId: session.user.id,
+      },
+      include: {
+        reads: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
     });
 
-    return NextResponse.json(formatted);
-  } catch (error: any) {
-    console.error("Erro ao buscar avisos enviados:", error);
-    return NextResponse.json({ 
-      error: "Erro interno v3-manual", 
-      details: error.message || "Sem detalhes extras" 
-    }, { status: 500 });
+    return NextResponse.json(sentNotifications);
+  } catch (error) {
+    console.error('Erro ao buscar notificações enviadas:', error);
+    return NextResponse.json(
+      { error: 'Erro interno ao buscar avisos enviados' },
+      { status: 500 }
+    );
   }
 }
 
-export async function DELETE(req: Request) {
+export async function DELETE(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session || !session.user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    const authResult = await requireAuth(req);
+    if (!authResult.authorized) {
+      return authResult.response;
+    }
+    const session = authResult.session;
 
-    const { searchParams } = new URL(req.url);
-    const id = searchParams.get("id");
-
-    if (!id) return NextResponse.json({ error: "ID não fornecido" }, { status: 400 });
-
-    await prisma.notification.delete({
-      where: { id }
+    const orgResult = await requireOrganization(req, {
+      requireActiveOrg: true,
+      allowGlobalAdminFallback: false,
     });
 
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error("Erro ao excluir aviso:", error);
-    return NextResponse.json({ error: "Erro interno de exclusão" }, { status: 500 });
+    if (!orgResult.authorized) {
+      return orgResult.response;
+    }
+
+    const { organizationId, isGlobalAdmin } = orgResult;
+
+    const membership = await prisma.organizationMembership.findFirst({
+      where: {
+        userId: session.user.id,
+        organizationId: organizationId!,
+        status: "ACTIVE",
+      },
+    });
+
+    if (!membership && !isGlobalAdmin) {
+      return NextResponse.json(
+        { error: "Acesso negado: Membro inativo ou não pertencente a esta organização" },
+        { status: 403 }
+      );
+    }
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'ID do aviso é obrigatório' },
+        { status: 400 }
+      );
+    }
+
+    const deleteResult = await prisma.notification.deleteMany({
+      where: {
+        id,
+        senderId: session.user.id,
+        organizationId: organizationId!,
+      },
+    });
+
+    if (deleteResult.count === 0) {
+      return NextResponse.json(
+        { error: 'Aviso não encontrado ou sem permissão para excluí-lo' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true, message: 'Aviso excluído com sucesso' });
+  } catch (error) {
+    console.error('Erro ao excluir aviso:', error);
+    return NextResponse.json(
+      { error: 'Erro interno ao excluir aviso' },
+      { status: 500 }
+    );
   }
 }

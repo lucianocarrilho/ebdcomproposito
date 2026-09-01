@@ -1,173 +1,251 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
-import { requireOrganization, getUserAssignedClasses } from "@/lib/permissions";
+import { requireAuth } from "@/lib/permissions";
+import { requireOrganization } from "@/lib/organization-guard";
 
-export const dynamic = "force-dynamic";
-
-// GET /api/notifications
-// Retrieves active notifications for the current user and check for upcoming birthdays
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   try {
-    const authResult = await requireOrganization(true);
-    if ('error' in authResult) {
-      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    const authResult = await requireAuth(req);
+    if (!authResult.authorized) {
+      return authResult.response;
+    }
+    const session = authResult.session;
+
+    const { searchParams } = new URL(req.url);
+    const unreadOnly = searchParams.get("unreadOnly") === "true";
+
+    // Lógica Multi-tenant isolada (S3A.2)
+    const orgResult = await requireOrganization(req, {
+      requireActiveOrg: false,
+      allowGlobalAdminFallback: false,
+    });
+
+    if (!orgResult.authorized) {
+      return orgResult.response;
     }
 
-    const { activeOrganizationId, orgRole, membership, user, globalAdminMode } = authResult as any;
+    const { organizationId, isGlobalAdmin, activeOrgId } = orgResult;
 
-    const fullAccessRoles = ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE"];
-    const isManager = globalAdminMode || fullAccessRoles.includes(orgRole);
-    const isRestricted = orgRole === "PROFESSOR" || orgRole === "APOIO";
+    // Se o usuário tiver um activeOrganizationId ou organização resolvida via guard
+    if (organizationId || activeOrgId) {
+      const targetOrgId = organizationId || activeOrgId;
 
-    if (!isManager && !isRestricted) {
-      return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
+      // Buscar membership ativa do usuário para determinar seu pertencimento à organização
+      const membership = await prisma.organizationMembership.findFirst({
+        where: {
+          userId: session.user.id,
+          organizationId: targetOrgId,
+          status: "ACTIVE",
+        },
+      });
+
+      // Se não possui membership ativa e não é Global Admin, 403 Forbidden
+      if (!membership && !isGlobalAdmin) {
+        return NextResponse.json(
+          { error: "Acesso negado: Usuário não é membro ativo desta organização" },
+          { status: 403 }
+        );
+      }
+
+      // Buscar notificações ativas da organização (Broadcast OR Pessoal direcionada ao userId)
+      const notifications = await prisma.notification.findMany({
+        where: {
+          active: true,
+          organizationId: targetOrgId,
+          OR: [
+            { userId: null }, // Broadcast para a congregação
+            { userId: session.user.id }, // Notificação pessoal
+          ],
+          AND: [
+            {
+              OR: [
+                { expiresAt: null },
+                { expiresAt: { gt: new Date() } },
+              ],
+            },
+          ],
+        },
+        include: {
+          reads: {
+            where: {
+              userId: session.user.id,
+            },
+          },
+          sender: {
+            select: {
+              name: true,
+              image: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+      // Mapear propriedade read com base em reads array
+      const mapped = notifications.map((n) => {
+        const isRead = n.reads.length > 0;
+        const { reads, ...rest } = n;
+        return {
+          ...rest,
+          read: isRead,
+        };
+      });
+
+      const filtered = unreadOnly ? mapped.filter((n) => !n.read) : mapped;
+      return NextResponse.json(filtered);
     }
 
-    const userId = user.id;
-    const now = new Date();
-
-    // 1. Fetch Global or Targeted Notifications
-    const dbNotifications = await prisma.notification.findMany({
+    // Comportamento Legacy (Sem organização ativa e sem header x-organization-id)
+    const notifications = await prisma.notification.findMany({
       where: {
         active: true,
+        OR: [
+          { userId: null },
+          { userId: session.user.id },
+        ],
         AND: [
           {
             OR: [
-              { organizationId: activeOrganizationId, userId: null },
-              { organizationId: activeOrganizationId, userId: userId },
-              { organizationId: null, userId: null },
-              { organizationId: null, userId: userId }
-            ]
-          },
-          {
-            OR: [
               { expiresAt: null },
-              { expiresAt: { gt: now } }
-            ]
-          }
-        ]
+              { expiresAt: { gt: new Date() } },
+            ],
+          },
+        ],
       },
       include: {
         reads: {
-          where: { userId: userId }
+          where: {
+            userId: session.user.id,
+          },
         },
         sender: {
-          select: { name: true, image: true }
-        }
+          select: {
+            name: true,
+            image: true,
+          },
+        },
       },
-      orderBy: { createdAt: "desc" },
-      take: 20
+      orderBy: {
+        createdAt: "desc",
+      },
     });
 
-    const birthdayNotifications: any[] = [];
-    const today = new Date();
+    const mapped = notifications.map((n) => {
+      const isRead = n.reads.length > 0;
+      const { reads, ...rest } = n;
+      return {
+        ...rest,
+        read: isRead,
+      };
+    });
 
-    try {
-      let canCheckBirthdays = false;
-      let studentsWhere: any = null;
-
-      if (isManager) {
-        canCheckBirthdays = true;
-        studentsWhere = {
-          active: true,
-          organizationId: activeOrganizationId,
-          class: {
-            organizationId: activeOrganizationId,
-            status: true
-          }
-        };
-      } else if (isRestricted && membership?.id) {
-        const { classIds } = await getUserAssignedClasses(userId, activeOrganizationId, membership.id);
-        if (classIds && classIds.length > 0) {
-          const activeClasses = await prisma.class.findMany({
-            where: {
-              id: { in: classIds },
-              organizationId: activeOrganizationId,
-              status: true
-            },
-            select: { id: true }
-          });
-
-          const assignedClassIds = activeClasses.map(c => c.id);
-          if (assignedClassIds.length > 0) {
-            canCheckBirthdays = true;
-            studentsWhere = {
-              active: true,
-              organizationId: activeOrganizationId,
-              classId: { in: assignedClassIds },
-              class: {
-                organizationId: activeOrganizationId,
-                status: true
-              }
-            };
-          }
-        }
-      }
-
-      if (canCheckBirthdays && studentsWhere) {
-        const allStudents = await prisma.student.findMany({
-          where: studentsWhere,
-          select: { id: true, name: true, birthDate: true, class: { select: { name: true } } }
-        });
-
-        allStudents.forEach(s => {
-          if (!s.birthDate) return;
-
-          const bday = new Date(s.birthDate);
-          const bdayThisYear = new Date(today.getFullYear(), bday.getMonth(), bday.getDate());
-
-          if (bdayThisYear < today && (today.getMonth() === 11 && bday.getMonth() === 0)) {
-            bdayThisYear.setFullYear(today.getFullYear() + 1);
-          }
-
-          const diffDays = Math.ceil((bdayThisYear.getTime() - today.getTime()) / (1000 * 3600 * 24));
-
-          if (diffDays >= 0 && diffDays <= 7) {
-            birthdayNotifications.push({
-              id: `bday-${s.id}`,
-              title: "🎉 Aniversariante Próximo!",
-              message: `${s.name} (${s.class?.name}) faz aniversário em ${diffDays === 0 ? 'HOJE!' : diffDays + ' dias.'}`,
-              type: "birthday",
-              createdAt: new Date(),
-              isBirthday: true
-            });
-          }
-        });
-      }
-    } catch (bdayError) {
-      console.error("Erro ao processar aniversariantes:", bdayError);
-    }
-
-    const finalNotifications = [
-      ...birthdayNotifications,
-      ...dbNotifications.map(n => ({
-        id: n.id,
-        title: n.title,
-        message: n.message,
-        type: n.type,
-        createdAt: n.createdAt,
-        isRead: n.reads.length > 0,
-        senderName: (n as any).sender?.name || "Coordenação"
-      }))
-    ];
-
-    return NextResponse.json(finalNotifications);
+    const filtered = unreadOnly ? mapped.filter((n) => !n.read) : mapped;
+    return NextResponse.json(filtered);
   } catch (error) {
     console.error("Erro ao buscar notificações:", error);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Erro interno ao buscar notificações" },
+      { status: 500 }
+    );
   }
 }
 
-// POST /api/notifications (COORDENACAO ONLY)
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session || (session.user as any).role === "PROFESSOR") {
-      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    const authResult = await requireAuth(req);
+    if (!authResult.authorized) {
+      return authResult.response;
+    }
+    const session = authResult.session;
+
+    const orgResult = await requireOrganization(req, {
+      requireActiveOrg: true,
+      allowGlobalAdminFallback: false,
+    });
+
+    if (!orgResult.authorized) {
+      return orgResult.response;
     }
 
-    const { title, message, type, expiresAt, targetUserId } = await req.json();
+    const { organizationId, isGlobalAdmin } = orgResult;
+
+    const membership = await prisma.organizationMembership.findFirst({
+      where: {
+        userId: session.user.id,
+        organizationId: organizationId!,
+        status: "ACTIVE",
+      },
+    });
+
+    if (!membership && !isGlobalAdmin) {
+      return NextResponse.json(
+        { error: "Acesso negado: Membro inativo ou não pertencente a esta organização" },
+        { status: 403 }
+      );
+    }
+
+    const orgRole = membership?.role || (isGlobalAdmin ? "ADMIN" : null);
+
+    if (orgRole !== "ADMIN" && orgRole !== "DIRIGENTE" && orgRole !== "VICE_DIRIGENTE") {
+      return NextResponse.json(
+        { error: "Acesso negado: Cargo sem permissão para disparar comunicados" },
+        { status: 403 }
+      );
+    }
+
+    const body = await req.json();
+
+    if ("organizationId" in body || "senderId" in body) {
+      return NextResponse.json(
+        { error: "Campos controlados pelo servidor não podem ser enviados pelo cliente" },
+        { status: 400 }
+      );
+    }
+
+    const { title, message, type, targetUserId, expiresAt } = body;
+
+    if (!title || !message) {
+      return NextResponse.json(
+        { error: "title e message são obrigatórios" },
+        { status: 400 }
+      );
+    }
+
+    let parsedExpiresAt: Date | null = null;
+    if (expiresAt) {
+      parsedExpiresAt = new Date(expiresAt);
+      if (isNaN(parsedExpiresAt.getTime())) {
+        return NextResponse.json(
+          { error: "Data de expiração inválida" },
+          { status: 400 }
+        );
+      }
+      if (parsedExpiresAt.getTime() <= Date.now()) {
+        return NextResponse.json(
+          { error: "Data de expiração deve ser no futuro" },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (targetUserId) {
+      const targetMembership = await prisma.organizationMembership.findFirst({
+        where: {
+          userId: targetUserId,
+          organizationId: organizationId!,
+          status: "ACTIVE",
+        },
+      });
+
+      if (!targetMembership) {
+        return NextResponse.json(
+          { error: "Usuário destinatário não encontrado ou inativo nesta organização" },
+          { status: 404 }
+        );
+      }
+    }
 
     const notification = await prisma.notification.create({
       data: {
@@ -175,14 +253,18 @@ export async function POST(req: Request) {
         message,
         type: type || "info",
         userId: targetUserId || null,
-        senderId: (session.user as any).id,
-        expiresAt: expiresAt ? new Date(expiresAt) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-      }
+        senderId: session.user.id,
+        organizationId: organizationId!,
+        expiresAt: parsedExpiresAt,
+      },
     });
 
-    return NextResponse.json(notification);
+    return NextResponse.json(notification, { status: 201 });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Erro ao criar notificação" }, { status: 500 });
+    console.error("Erro ao criar notificação:", error);
+    return NextResponse.json(
+      { error: "Erro interno do servidor ao disparar notificação" },
+      { status: 500 }
+    );
   }
 }

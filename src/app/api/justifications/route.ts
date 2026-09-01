@@ -1,177 +1,342 @@
-import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
-import { requireOrganization, getUserAssignedClasses } from "@/lib/permissions";
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/permissions";
+import { requireOrganization } from "@/lib/organization-guard";
 
-export async function GET(request: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
-    const authResult = await requireOrganization(true);
-    if ('error' in authResult) {
-      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    const authResult = await requireAuth(req);
+    if (!authResult.authorized) {
+      return authResult.response;
+    }
+    const session = authResult.session;
+
+    const { searchParams } = new URL(req.url);
+    const studentId = searchParams.get("studentId");
+    const classId = searchParams.get("classId");
+
+    // Lógica Multi-tenant isolada (S3A.2)
+    const orgResult = await requireOrganization(req, {
+      requireActiveOrg: false,
+      allowGlobalAdminFallback: false,
+    });
+
+    if (!orgResult.authorized) {
+      return orgResult.response;
     }
 
-    const { activeOrganizationId, orgRole, membership, user, globalAdminMode } = authResult as any;
+    const { organizationId, isGlobalAdmin, activeOrgId } = orgResult;
 
-    const fullAccessRoles = ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE"];
-    const isManager = globalAdminMode || fullAccessRoles.includes(orgRole);
-    const isRestricted = orgRole === "PROFESSOR" || orgRole === "APOIO";
+    // Se o usuário tiver um activeOrganizationId ou organização resolvida via guard
+    if (organizationId || activeOrgId) {
+      const targetOrgId = organizationId || activeOrgId;
 
-    if (!isManager && !isRestricted) {
-      return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
-    }
-
-    let assignedClassIds: string[] = [];
-
-    if (isRestricted) {
-      if (!membership?.id) {
-        return NextResponse.json([]);
-      }
-
-      const { classIds } = await getUserAssignedClasses(user.id, activeOrganizationId, membership.id);
-
-      if (!classIds || classIds.length === 0) {
-        return NextResponse.json([]);
-      }
-
-      const activeClasses = await prisma.class.findMany({
+      // Buscar membership ativa do usuário para determinar seu cargo real na organização
+      const membership = await prisma.organizationMembership.findFirst({
         where: {
-          id: { in: classIds },
-          organizationId: activeOrganizationId,
-          status: true
+          userId: session.user.id,
+          organizationId: targetOrgId,
+          status: "ACTIVE",
         },
-        select: { id: true }
       });
 
-      assignedClassIds = activeClasses.map(c => c.id);
-
-      if (assignedClassIds.length === 0) {
-        return NextResponse.json([]);
+      // Se não possui membership ativa e não é Global Admin, 403 Forbidden
+      if (!membership && !isGlobalAdmin) {
+        return NextResponse.json(
+          { error: "Acesso negado: Usuário não é membro ativo desta organização" },
+          { status: 403 }
+        );
       }
+
+      const orgRole = membership?.role || (isGlobalAdmin ? "ADMIN" : null);
+
+      // Cargos Gestores (ADMIN, DIRIGENTE, VICE_DIRIGENTE) ou Global Admin
+      if (orgRole === "ADMIN" || orgRole === "DIRIGENTE" || orgRole === "VICE_DIRIGENTE") {
+        const whereClause: any = { organizationId: targetOrgId };
+        if (studentId) whereClause.studentId = studentId;
+
+        if (classId) {
+          whereClause.student = { classId };
+        }
+
+        const justifications = await prisma.absenceJustification.findMany({
+          where: whereClause,
+          include: {
+            student: {
+              select: {
+                id: true,
+                name: true,
+                classId: true,
+              },
+            },
+            registeredBy: {
+              select: {
+                name: true,
+              },
+            },
+          },
+          orderBy: { date: "desc" },
+        });
+
+        return NextResponse.json(justifications);
+      }
+
+      // Cargos Operacionais (PROFESSOR, APOIO)
+      if (orgRole === "PROFESSOR" || orgRole === "APOIO") {
+        if (!membership) {
+          return NextResponse.json(
+            { error: "Acesso negado: Membership não encontrada" },
+            { status: 403 }
+          );
+        }
+
+        // Buscar turmas ativas atribuídas ao usuário via CSA
+        const assignments = await prisma.classStaffAssignment.findMany({
+          where: {
+            organizationMembershipId: membership.id,
+            organizationId: targetOrgId,
+            active: true,
+          },
+          select: { classId: true },
+        });
+
+        const assignedClassIds = assignments.map((a) => a.classId);
+
+        // Se não possui turmas atribuídas por CSA, retorna lista vazia
+        if (assignedClassIds.length === 0) {
+          return NextResponse.json([]);
+        }
+
+        // Se o cliente solicitou uma turma específica, validar se está atribuída via CSA
+        if (classId && !assignedClassIds.includes(classId)) {
+          return NextResponse.json(
+            { error: "Acesso negado: Turma não atribuída ao usuário nesta organização" },
+            { status: 403 }
+          );
+        }
+
+        const allowedClassIds = classId ? [classId] : assignedClassIds;
+
+        const whereClause: any = {
+          organizationId: targetOrgId,
+          student: {
+            classId: { in: allowedClassIds },
+          },
+        };
+
+        if (studentId) whereClause.studentId = studentId;
+
+        const justifications = await prisma.absenceJustification.findMany({
+          where: whereClause,
+          include: {
+            student: {
+              select: {
+                id: true,
+                name: true,
+                classId: true,
+              },
+            },
+            registeredBy: {
+              select: {
+                name: true,
+              },
+            },
+          },
+          orderBy: { date: "desc" },
+        });
+
+        return NextResponse.json(justifications);
+      }
+
+      // Cargo desconhecido ou sem permissão
+      return NextResponse.json(
+        { error: "Acesso negado: Cargo sem permissão para visualizar justificativas" },
+        { status: 403 }
+      );
     }
 
-    const justificationWhere: any = {
-      AND: [
-        {
-          student: {
-            organizationId: activeOrganizationId,
-            class: {
-              organizationId: activeOrganizationId,
-              status: true
-            }
-          }
-        },
-        {
-          OR: [
-            { organizationId: activeOrganizationId },
-            { organizationId: null }
-          ]
-        }
-      ]
-    };
+    // Comportamento Legacy (Sem organização ativa e sem header x-organization-id)
+    const whereClause: any = {};
+    if (studentId) whereClause.studentId = studentId;
 
-    if (isRestricted) {
-      justificationWhere.AND.push({
-        student: {
-          classId: { in: assignedClassIds }
-        }
-      });
+    if (classId) {
+      whereClause.student = { classId };
     }
 
     const justifications = await prisma.absenceJustification.findMany({
-      where: justificationWhere,
+      where: whereClause,
       include: {
-        student: { select: { name: true, photo: true, class: { select: { name: true } } } },
-        registeredBy: { select: { name: true } }
+        student: {
+          select: {
+            id: true,
+            name: true,
+            classId: true,
+          },
+        },
+        registeredBy: {
+          select: {
+            name: true,
+          },
+        },
       },
-      orderBy: { date: "desc" }
+      orderBy: { date: "desc" },
     });
 
-    const formatted = justifications.map(j => ({
-      id: j.id,
-      studentName: j.student.name,
-      studentPhoto: j.student.photo || null,
-      className: j.student.class.name,
-      date: j.date.toLocaleDateString("pt-BR"),
-      dateRaw: j.date,
-      reason: j.reason,
-      observations: j.observations || "",
-      registeredBy: j.registeredBy?.name || "Sistema",
-      isLeader: false
-    }));
-
-    let formattedLeaders: any[] = [];
-
-    if (isManager) {
-      const leaderJustifications = await prisma.leaderAttendance.findMany({
-        where: {
-          status: "FALTA_JUSTIFICADA",
-          leader: {
-            organizationId: activeOrganizationId,
-            active: true,
-            OR: [
-              { classId: null },
-              { class: { organizationId: activeOrganizationId } }
-            ]
-          }
-        },
-        include: {
-          leader: { select: { name: true, role: true, photo: true } }
-        },
-        orderBy: { date: "desc" }
-      });
-
-      formattedLeaders = leaderJustifications.map(lj => ({
-        id: lj.id,
-        studentName: lj.leader.name,
-        studentPhoto: lj.leader.photo || null,
-        className: `Liderança (${lj.leader.role})`,
-        date: lj.date.toLocaleDateString("pt-BR"),
-        dateRaw: lj.date,
-        reason: lj.justification || "Falta justificada via chamada",
-        observations: "",
-        registeredBy: "Sistema",
-        isLeader: true
-      }));
-    }
-
-    const all = [...formatted, ...formattedLeaders]
-      .sort((a, b) => new Date(b.dateRaw).getTime() - new Date(a.dateRaw).getTime())
-      .map(({ dateRaw, ...rest }) => rest);
-
-    return NextResponse.json(all);
+    return NextResponse.json(justifications);
   } catch (error) {
     console.error("Erro ao buscar justificativas:", error);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Erro interno do servidor ao buscar justificativas" },
+      { status: 500 }
+    );
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    const authResult = await requireAuth(req);
+    if (!authResult.authorized) {
+      return authResult.response;
     }
+    const session = authResult.session;
 
-    const body = await request.json();
-    const { studentId, date, reason, observations } = body;
-
-    const justification = await prisma.absenceJustification.create({
-      data: {
-        studentId,
-        date: new Date(date),
-        reason,
-        observations,
-        registeredById: session.user?.id
-      },
-      include: {
-        student: { select: { name: true } },
-        registeredBy: { select: { name: true } }
-      }
+    const orgResult = await requireOrganization(req, {
+      requireActiveOrg: true,
+      allowGlobalAdminFallback: false,
     });
 
-    return NextResponse.json(justification);
+    if (!orgResult.authorized) {
+      return orgResult.response;
+    }
+
+    const { organizationId, isGlobalAdmin } = orgResult;
+
+    const membership = await prisma.organizationMembership.findFirst({
+      where: {
+        userId: session.user.id,
+        organizationId: organizationId!,
+        status: "ACTIVE",
+      },
+    });
+
+    if (!membership && !isGlobalAdmin) {
+      return NextResponse.json(
+        { error: "Acesso negado: Membro inativo ou não pertencente a esta organização" },
+        { status: 403 }
+      );
+    }
+
+    const orgRole = membership?.role || (isGlobalAdmin ? "ADMIN" : null);
+
+    const body = await req.json();
+
+    if ("organizationId" in body || "registeredById" in body) {
+      return NextResponse.json(
+        { error: "Campos controlados pelo servidor não podem ser enviados pelo cliente" },
+        { status: 400 }
+      );
+    }
+
+    const { studentId, date, reason, observations } = body;
+
+    if (!studentId || !date || !reason) {
+      return NextResponse.json(
+        { error: "studentId, date e reason são obrigatórios" },
+        { status: 400 }
+      );
+    }
+
+    const parsedDate = new Date(date);
+    if (isNaN(parsedDate.getTime())) {
+      return NextResponse.json(
+        { error: "Data inválida" },
+        { status: 400 }
+      );
+    }
+
+    const student = await prisma.student.findFirst({
+      where: {
+        id: studentId,
+        organizationId: organizationId!,
+        active: true,
+      },
+    });
+
+    if (!student) {
+      return NextResponse.json(
+        { error: "Estudante não encontrado nesta organização" },
+        { status: 404 }
+      );
+    }
+
+    if (orgRole === "PROFESSOR" || orgRole === "APOIO") {
+      if (!membership) {
+        return NextResponse.json(
+          { error: "Acesso negado: Membership não encontrada" },
+          { status: 403 }
+        );
+      }
+
+      const csa = await prisma.classStaffAssignment.findFirst({
+        where: {
+          organizationMembershipId: membership.id,
+          classId: student.classId,
+          organizationId: organizationId!,
+          active: true,
+        },
+      });
+
+      if (!csa) {
+        return NextResponse.json(
+          { error: "Acesso negado: Estudante não pertence a uma turma atribuída a este usuário" },
+          { status: 403 }
+        );
+      }
+    } else if (orgRole !== "ADMIN" && orgRole !== "DIRIGENTE" && orgRole !== "VICE_DIRIGENTE") {
+      return NextResponse.json(
+        { error: "Acesso negado: Cargo sem permissão para registrar justificativa" },
+        { status: 403 }
+      );
+    }
+
+    const justification = await prisma.$transaction(async (tx) => {
+      const existingJustification = await tx.absenceJustification.findFirst({
+        where: {
+          studentId,
+          date: parsedDate,
+          organizationId: organizationId!,
+        },
+      });
+
+      if (existingJustification) {
+        return await tx.absenceJustification.update({
+          where: { id: existingJustification.id },
+          data: {
+            reason,
+            observations,
+            registeredById: session.user.id,
+          },
+        });
+      }
+
+      return await tx.absenceJustification.create({
+        data: {
+          studentId,
+          date: parsedDate,
+          reason,
+          observations,
+          organizationId: organizationId!,
+          registeredById: session.user.id,
+        },
+      });
+    });
+
+    return NextResponse.json(justification, { status: 201 });
   } catch (error) {
     console.error("Erro ao criar justificativa:", error);
-    return NextResponse.json({ error: "Erro ao criar" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Erro interno do servidor ao registrar justificativa" },
+      { status: 500 }
+    );
   }
 }
