@@ -16,17 +16,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         password: { label: "Senha", type: "password" },
       },
       async authorize(credentials) {
-        const fs = require('fs');
-        const log = (msg: string) => {
-          console.log(msg);
-          fs.appendFileSync('auth_debug.log', msg + '\n');
-        };
-
-        log("[Auth] Autorizando: " + credentials?.email);
-        
         try {
           if (!credentials?.email || !credentials?.password) {
-            log("[Auth] Falha: email ou senha ausentes");
             return null;
           }
 
@@ -40,14 +31,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             }
           });
 
-          log("[Auth] User debug: " + (user ? "Encontrado" : "Não encontrado"));
-
           if (!user) {
-            log("[Auth] Falha: Usuário nulo");
             return null;
           }
           if (!user.active) {
-            log("[Auth] Falha: Usuário inativo");
             return null;
           }
 
@@ -56,10 +43,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             user.password
           );
 
-          log("[Auth] Password debug: " + (isPasswordValid ? "Válida" : "Inválida"));
-
           if (!isPasswordValid) {
-            log("[Auth] Falha: Senha inválida");
             return null;
           }
 
@@ -72,8 +56,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               role: m.role
             }));
           
-          log("[Auth] Retornando usuário com sucesso.");
-
           return {
             id: user.id,
             name: user.name,
@@ -83,9 +65,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             isGlobalAdmin: user.isGlobalAdmin,
             validMemberships
           };
-        } catch (error) {
-          log("[Auth] Authorize error: " + (error as any).message);
-          console.error(error);
+        } catch {
           return null;
         }
       },
