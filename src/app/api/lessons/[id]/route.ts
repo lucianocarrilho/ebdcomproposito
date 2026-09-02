@@ -1,51 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/permissions";
-import { requireOrganization } from "@/lib/organization-guard";
+import { requireOrganization } from "@/lib/permissions";
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = await requireAuth(req);
-    if (!authResult.authorized) {
-      return authResult.response;
-    }
-    const session = authResult.session;
-
-    const orgResult = await requireOrganization(req, {
-      requireActiveOrg: true,
-      allowGlobalAdminFallback: false,
-    });
-
-    if (!orgResult.authorized) {
-      return orgResult.response;
-    }
-
-    const { organizationId, isGlobalAdmin } = orgResult;
-
-    const membership = await prisma.organizationMembership.findFirst({
-      where: {
-        userId: session.user.id,
-        organizationId: organizationId!,
-        status: "ACTIVE",
-      },
-    });
-
-    if (!membership && !isGlobalAdmin) {
+    const { id } = await params;
+    const authResult = await requireOrganization(true);
+    if ("error" in authResult || !("activeOrganizationId" in authResult)) {
       return NextResponse.json(
-        { error: "Acesso negado: Membro inativo ou não pertencente a esta organização" },
-        { status: 403 }
+        { error: "error" in authResult ? authResult.error : "Organização não selecionada" },
+        { status: "status" in authResult ? authResult.status : 403 }
       );
     }
 
-    const orgRole = membership?.role || (isGlobalAdmin ? "ADMIN" : null);
+    const { activeOrganizationId, orgRole, membership, user, globalAdminMode } = authResult;
 
     const existingLesson = await prisma.lesson.findFirst({
       where: {
-        id: params.id,
-        organizationId: organizationId!,
+        id,
+        organizationId: activeOrganizationId,
       },
     });
 
@@ -66,6 +42,7 @@ export async function PUT(
     }
 
     const { category } = body;
+    const isManager = globalAdminMode || (orgRole ? ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE"].includes(orgRole) : false);
 
     if (orgRole === "PROFESSOR" || orgRole === "APOIO") {
       if (!membership) {
@@ -78,7 +55,7 @@ export async function PUT(
       const assignments = await prisma.classStaffAssignment.findMany({
         where: {
           organizationMembershipId: membership.id,
-          organizationId: organizationId!,
+          organizationId: activeOrganizationId,
           active: true,
         },
         include: {
@@ -103,7 +80,7 @@ export async function PUT(
           { status: 403 }
         );
       }
-    } else if (orgRole !== "ADMIN" && orgRole !== "DIRIGENTE" && orgRole !== "VICE_DIRIGENTE") {
+    } else if (!isManager) {
       return NextResponse.json(
         { error: "Acesso negado: Cargo sem permissão para editar lição" },
         { status: 403 }
@@ -111,7 +88,7 @@ export async function PUT(
     }
 
     const updatedLesson = await prisma.lesson.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         number: body.number !== undefined ? Number(body.number) : undefined,
         title: body.title !== undefined ? body.title : undefined,
@@ -139,44 +116,23 @@ export async function PUT(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = await requireAuth(req);
-    if (!authResult.authorized) {
-      return authResult.response;
-    }
-    const session = authResult.session;
-
-    const orgResult = await requireOrganization(req, {
-      requireActiveOrg: true,
-      allowGlobalAdminFallback: false,
-    });
-
-    if (!orgResult.authorized) {
-      return orgResult.response;
-    }
-
-    const { organizationId, isGlobalAdmin } = orgResult;
-
-    const membership = await prisma.organizationMembership.findFirst({
-      where: {
-        userId: session.user.id,
-        organizationId: organizationId!,
-        status: "ACTIVE",
-      },
-    });
-
-    if (!membership && !isGlobalAdmin) {
+    const { id } = await params;
+    const authResult = await requireOrganization(true);
+    if ("error" in authResult || !("activeOrganizationId" in authResult)) {
       return NextResponse.json(
-        { error: "Acesso negado: Membro inativo ou não pertencente a esta organização" },
-        { status: 403 }
+        { error: "error" in authResult ? authResult.error : "Organização não selecionada" },
+        { status: "status" in authResult ? authResult.status : 403 }
       );
     }
 
-    const orgRole = membership?.role || (isGlobalAdmin ? "ADMIN" : null);
+    const { activeOrganizationId, orgRole, membership, user, globalAdminMode } = authResult;
 
-    if (orgRole !== "ADMIN" && orgRole !== "DIRIGENTE" && orgRole !== "VICE_DIRIGENTE") {
+    const isManager = globalAdminMode || (orgRole ? ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE"].includes(orgRole) : false);
+
+    if (!isManager) {
       return NextResponse.json(
         { error: "Acesso negado: Cargo sem permissão para excluir lição" },
         { status: 403 }
@@ -185,8 +141,8 @@ export async function DELETE(
 
     const existingLesson = await prisma.lesson.findFirst({
       where: {
-        id: params.id,
-        organizationId: organizationId!,
+        id,
+        organizationId: activeOrganizationId,
       },
     });
 
@@ -198,7 +154,7 @@ export async function DELETE(
     }
 
     await prisma.lesson.delete({
-      where: { id: params.id },
+      where: { id },
     });
 
     return NextResponse.json({ success: true, message: "Lição excluída com sucesso" });

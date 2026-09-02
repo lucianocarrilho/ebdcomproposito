@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/permissions";
-import { requireOrganization } from "@/lib/organization-guard";
+import { requireOrganization } from "@/lib/permissions";
 
-export async function GET(req: NextRequest) {
+// GET - Buscar chamada por data e classe
+export async function GET(request: NextRequest) {
   try {
-    const authResult = await requireAuth(req);
-    if (!authResult.authorized) {
-      return authResult.response;
-    }
-
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = new URL(request.url);
     const classId = searchParams.get("classId");
     const date = searchParams.get("date");
 
@@ -21,68 +16,66 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Usar Date em UTC para evitar discrepâncias de fuso horário
-    const targetDate = new Date(`${date}T00:00:00.000Z`);
+    const parsedDate = new Date(date + "T00:00:00.000Z");
 
-    const record = await prisma.attendanceRecord.findFirst({
+    // Get existing record
+    const record = await prisma.attendanceRecord.findUnique({
       where: {
-        classId,
-        date: targetDate,
+        date_classId: { date: parsedDate, classId },
       },
       include: {
-        items: true,
+        items: {
+          include: { student: { select: { id: true, name: true, photo: true } } },
+        },
       },
     });
 
-    if (!record) {
-      return NextResponse.json(null);
-    }
+    // Get all students for the class
+    const students = await prisma.student.findMany({
+      where: { classId, active: true },
+      select: { id: true, name: true, photo: true },
+      orderBy: { name: "asc" },
+    });
 
-    return NextResponse.json(record);
+    // Merge data
+    const attendanceList = students.map((student) => {
+      const item = record?.items.find((i) => i.studentId === student.id);
+      return {
+        studentId: student.id,
+        studentName: student.name,
+        photo: student.photo || null,
+        status: item?.status || "",
+        observations: item?.observations || "",
+      };
+    });
+
+    return NextResponse.json({
+      record: record ? {
+        ...record,
+        biblias: record.biblias || 0,
+        revistas: record.revistas || 0,
+        ofertas: record.ofertas ? Number(record.ofertas) : 0,
+        outros: record.outros || 0,
+      } : null,
+      students: attendanceList,
+    });
   } catch (error) {
     console.error("Erro ao buscar presença:", error);
-    return NextResponse.json(
-      { error: "Erro interno ao buscar presença" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const authResult = await requireAuth(req);
-    if (!authResult.authorized) {
-      return authResult.response;
-    }
-    const session = authResult.session;
-
-    const orgResult = await requireOrganization(req, {
-      requireActiveOrg: true,
-      allowGlobalAdminFallback: false,
-    });
-
-    if (!orgResult.authorized) {
-      return orgResult.response;
-    }
-
-    const { organizationId, isGlobalAdmin } = orgResult;
-
-    const membership = await prisma.organizationMembership.findFirst({
-      where: {
-        userId: session.user.id,
-        organizationId: organizationId!,
-        status: "ACTIVE",
-      },
-    });
-
-    if (!membership && !isGlobalAdmin) {
+    const authResult = await requireOrganization(true);
+    if ("error" in authResult || !("activeOrganizationId" in authResult)) {
       return NextResponse.json(
-        { error: "Acesso negado: Membro inativo ou não pertencente a esta organização" },
-        { status: 403 }
+        { error: "error" in authResult ? authResult.error : "Organização não selecionada" },
+        { status: "status" in authResult ? authResult.status : 403 }
       );
     }
 
-    const orgRole = membership?.role || (isGlobalAdmin ? "ADMIN" : null);
+    const { activeOrganizationId, orgRole, membership, user, globalAdminMode } = authResult;
 
     const body = await req.json();
 
@@ -113,7 +106,7 @@ export async function POST(req: NextRequest) {
     const targetClass = await prisma.class.findFirst({
       where: {
         id: classId,
-        organizationId: organizationId!,
+        organizationId: activeOrganizationId,
       },
     });
 
@@ -123,6 +116,8 @@ export async function POST(req: NextRequest) {
         { status: 404 }
       );
     }
+
+    const isManager = globalAdminMode || (orgRole ? ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE"].includes(orgRole) : false);
 
     if (orgRole === "PROFESSOR" || orgRole === "APOIO") {
       if (!membership) {
@@ -136,7 +131,7 @@ export async function POST(req: NextRequest) {
         where: {
           organizationMembershipId: membership.id,
           classId,
-          organizationId: organizationId!,
+          organizationId: activeOrganizationId,
           active: true,
         },
       });
@@ -147,7 +142,7 @@ export async function POST(req: NextRequest) {
           { status: 403 }
         );
       }
-    } else if (orgRole !== "ADMIN" && orgRole !== "DIRIGENTE" && orgRole !== "VICE_DIRIGENTE") {
+    } else if (!isManager) {
       return NextResponse.json(
         { error: "Acesso negado: Cargo sem permissão para registrar chamada" },
         { status: 403 }
@@ -169,7 +164,7 @@ export async function POST(req: NextRequest) {
         where: {
           id: { in: studentIds },
           classId,
-          organizationId: organizationId!,
+          organizationId: activeOrganizationId,
         },
       });
 
@@ -198,7 +193,7 @@ export async function POST(req: NextRequest) {
             revistas: revistas !== undefined ? Number(revistas) : undefined,
             ofertas: ofertas !== undefined ? Number(ofertas) : undefined,
             outros: outros !== undefined ? Number(outros) : undefined,
-            organizationId: organizationId!,
+            organizationId: activeOrganizationId,
           },
         });
 
@@ -215,7 +210,7 @@ export async function POST(req: NextRequest) {
             revistas: revistas !== undefined ? Number(revistas) : 0,
             ofertas: ofertas !== undefined ? Number(ofertas) : 0,
             outros: outros !== undefined ? Number(outros) : 0,
-            organizationId: organizationId!,
+            organizationId: activeOrganizationId,
           },
         });
       }
@@ -238,7 +233,7 @@ export async function POST(req: NextRequest) {
               where: {
                 studentId: item.studentId,
                 date: targetDate,
-                organizationId: organizationId!,
+                organizationId: activeOrganizationId,
               },
             });
 
@@ -248,7 +243,7 @@ export async function POST(req: NextRequest) {
                 data: {
                   reason: reasonText,
                   observations: item.observations || null,
-                  registeredById: session.user.id,
+                  registeredById: user.id,
                 },
               });
             } else {
@@ -258,8 +253,8 @@ export async function POST(req: NextRequest) {
                   date: targetDate,
                   reason: reasonText,
                   observations: item.observations || null,
-                  organizationId: organizationId!,
-                  registeredById: session.user.id,
+                  organizationId: activeOrganizationId,
+                  registeredById: user.id,
                 },
               });
             }

@@ -1,197 +1,128 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/permissions';
-import { requireOrganization } from '@/lib/organization-guard';
+import { prisma } from "@/lib/prisma";
+import { requireOrganization, getUserAssignedClasses } from "@/lib/permissions";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function GET(req: NextRequest) {
+export const dynamic = "force-dynamic";
+
+// GET - Listar lições
+export async function GET(request: NextRequest) {
   try {
-    const authResult = await requireAuth(req);
-    if (!authResult.authorized) {
-      return authResult.response;
-    }
-    const session = authResult.session;
-
-    const { searchParams } = new URL(req.url);
-    const quarter = searchParams.get('quarter');
-    const category = searchParams.get('category');
-    const classId = searchParams.get('classId');
-
-    // Lógica Multi-tenant isolada (S3A.2)
-    const orgResult = await requireOrganization(req, {
-      requireActiveOrg: false,
-      allowGlobalAdminFallback: false,
-    });
-
-    if (!orgResult.authorized) {
-      return orgResult.response;
-    }
-
-    const { organizationId, isGlobalAdmin, activeOrgId } = orgResult;
-
-    // Se o usuário tiver um activeOrganizationId ou organização resolvida via guard
-    if (organizationId || activeOrgId) {
-      const targetOrgId = organizationId || activeOrgId;
-
-      // Buscar membership ativa do usuário para determinar seu cargo real na organização
-      const membership = await prisma.organizationMembership.findFirst({
-        where: {
-          userId: session.user.id,
-          organizationId: targetOrgId,
-          status: "ACTIVE",
-        },
-      });
-
-      // Se não possui membership ativa e não é Global Admin, 403 Forbidden
-      if (!membership && !isGlobalAdmin) {
-        return NextResponse.json(
-          { error: "Acesso negado: Usuário não é membro ativo desta organização" },
-          { status: 403 }
-        );
-      }
-
-      const orgRole = membership?.role || (isGlobalAdmin ? "ADMIN" : null);
-
-      // Cargos Gestores (ADMIN, DIRIGENTE, VICE_DIRIGENTE) ou Global Admin
-      if (orgRole === "ADMIN" || orgRole === "DIRIGENTE" || orgRole === "VICE_DIRIGENTE") {
-        const whereClause: any = { organizationId: targetOrgId };
-        if (quarter) whereClause.quarter = quarter;
-        if (category) whereClause.category = category;
-        if (classId) whereClause.classId = classId;
-
-        const lessons = await prisma.lesson.findMany({
-          where: whereClause,
-          orderBy: { number: 'asc' },
-        });
-
-        return NextResponse.json(lessons);
-      }
-
-      // Cargos Operacionais (PROFESSOR, APOIO)
-      if (orgRole === "PROFESSOR" || orgRole === "APOIO") {
-        if (!membership) {
-          return NextResponse.json(
-            { error: "Acesso negado: Membership não encontrada" },
-            { status: 403 }
-          );
-        }
-
-        // Buscar turmas ativas atribuídas ao usuário via CSA com include da Class para categoria de lição
-        const assignments = await prisma.classStaffAssignment.findMany({
-          where: {
-            organizationMembershipId: membership.id,
-            organizationId: targetOrgId,
-            active: true,
-          },
-          include: {
-            class: true,
-          },
-        });
-
-        // Extrair os nomes e audiências/categorias das turmas atribuídas
-        const assignedClassNames = assignments.map((a) => a.class.name);
-        const assignedAudiences = assignments
-          .map((a) => a.class.audience)
-          .filter((aud): aud is string => Boolean(aud));
-
-        const allowedCategories = Array.from(
-          new Set([...assignedClassNames, ...assignedAudiences])
-        );
-
-        // Se não possui turmas nem categorias válidas via CSA, retorna lista vazia
-        if (allowedCategories.length === 0) {
-          return NextResponse.json([]);
-        }
-
-        const whereClause: any = {
-          organizationId: targetOrgId,
-          category: { in: allowedCategories },
-        };
-
-        if (quarter) whereClause.quarter = quarter;
-        if (category) {
-          // Rejeitar se tentar filtrar por categoria não autorizada pelo CSA
-          if (!allowedCategories.includes(category)) {
-            return NextResponse.json(
-              { error: "Acesso negado: Categoria não atribuída ao usuário nesta organização" },
-              { status: 403 }
-            );
-          }
-          whereClause.category = category;
-        }
-
-        if (classId) whereClause.classId = classId;
-
-        const lessons = await prisma.lesson.findMany({
-          where: whereClause,
-          orderBy: { number: 'asc' },
-        });
-
-        return NextResponse.json(lessons);
-      }
-
-      // Cargo desconhecido ou sem permissão
+    const authResult = await requireOrganization(true);
+    if ("error" in authResult || !("activeOrganizationId" in authResult)) {
       return NextResponse.json(
-        { error: "Acesso negado: Cargo sem permissão para visualizar lições" },
-        { status: 403 }
+        { error: "error" in authResult ? authResult.error : "Organização não selecionada" },
+        { status: "status" in authResult ? authResult.status : 403 }
       );
     }
 
-    // Comportamento Legacy (Sem organização ativa e sem header x-organization-id)
-    const whereClause: any = {};
-    if (quarter) whereClause.quarter = quarter;
-    if (category) whereClause.category = category;
-    if (classId) whereClause.classId = classId;
+    const { activeOrganizationId, orgRole, membership, user, globalAdminMode } = authResult;
+
+    const fullAccessRoles = ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE"];
+    const isManager = globalAdminMode || (orgRole ? fullAccessRoles.includes(orgRole) : false);
+    const isRestricted = orgRole === "PROFESSOR" || orgRole === "APOIO";
+
+    if (!isManager && !isRestricted) {
+      return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const quarter = searchParams.get("quarter") || "2026-Q2";
+    const category = searchParams.get("category");
+
+    const where: any = { quarter };
+
+    if (isManager) {
+      where.OR = [
+        {
+          organizationId: activeOrganizationId,
+          OR: [
+            { classId: null },
+            { class: { organizationId: activeOrganizationId } }
+          ]
+        },
+        {
+          organizationId: null,
+          classId: null
+        }
+      ];
+
+      if (category) {
+        where.category = category;
+      }
+    } else {
+      if (!membership?.id) {
+        return NextResponse.json([]);
+      }
+
+      const { classIds } = await getUserAssignedClasses(user.id, activeOrganizationId, membership.id);
+
+      if (!classIds || classIds.length === 0) {
+        return NextResponse.json([]);
+      }
+
+      const activeClasses = await prisma.class.findMany({
+        where: {
+          id: { in: classIds },
+          organizationId: activeOrganizationId,
+          status: true
+        },
+        select: { id: true, name: true }
+      });
+
+      if (activeClasses.length === 0) {
+        return NextResponse.json([]);
+      }
+
+      const assignedClassIds = activeClasses.map(c => c.id);
+      const allowedCategories = activeClasses.map(c => c.name);
+
+      if (category && !allowedCategories.includes(category)) {
+        return NextResponse.json([]);
+      }
+
+      const targetCategories = category ? [category] : allowedCategories;
+
+      where.OR = [
+        {
+          organizationId: activeOrganizationId,
+          classId: { in: assignedClassIds }
+        },
+        {
+          organizationId: activeOrganizationId,
+          classId: null,
+          category: { in: targetCategories }
+        },
+        {
+          organizationId: null,
+          classId: null,
+          category: { in: targetCategories }
+        }
+      ];
+    }
 
     const lessons = await prisma.lesson.findMany({
-      where: whereClause,
-      orderBy: { number: 'asc' },
+      where,
+      orderBy: { number: "asc" },
     });
 
     return NextResponse.json(lessons);
   } catch (error) {
     console.error("Erro ao buscar lições:", error);
-    return NextResponse.json(
-      { error: "Erro interno do servidor ao buscar lições" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Erro ao buscar lições" }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const authResult = await requireAuth(req);
-    if (!authResult.authorized) {
-      return authResult.response;
-    }
-    const session = authResult.session;
-
-    const orgResult = await requireOrganization(req, {
-      requireActiveOrg: true,
-      allowGlobalAdminFallback: false,
-    });
-
-    if (!orgResult.authorized) {
-      return orgResult.response;
-    }
-
-    const { organizationId, isGlobalAdmin } = orgResult;
-
-    const membership = await prisma.organizationMembership.findFirst({
-      where: {
-        userId: session.user.id,
-        organizationId: organizationId!,
-        status: "ACTIVE",
-      },
-    });
-
-    if (!membership && !isGlobalAdmin) {
+    const authResult = await requireOrganization(true);
+    if ("error" in authResult || !("activeOrganizationId" in authResult)) {
       return NextResponse.json(
-        { error: "Acesso negado: Membro inativo ou não pertencente a esta organização" },
-        { status: 403 }
+        { error: "error" in authResult ? authResult.error : "Organização não selecionada" },
+        { status: "status" in authResult ? authResult.status : 403 }
       );
     }
 
-    const orgRole = membership?.role || (isGlobalAdmin ? "ADMIN" : null);
+    const { activeOrganizationId, orgRole, membership, user, globalAdminMode } = authResult;
 
     const body = await req.json();
 
@@ -211,6 +142,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const isManager = globalAdminMode || (orgRole ? ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE"].includes(orgRole) : false);
+
     if (orgRole === "PROFESSOR" || orgRole === "APOIO") {
       if (!membership) {
         return NextResponse.json(
@@ -222,7 +155,7 @@ export async function POST(req: NextRequest) {
       const assignments = await prisma.classStaffAssignment.findMany({
         where: {
           organizationMembershipId: membership.id,
-          organizationId: organizationId!,
+          organizationId: activeOrganizationId,
           active: true,
         },
         include: {
@@ -245,7 +178,7 @@ export async function POST(req: NextRequest) {
           { status: 403 }
         );
       }
-    } else if (orgRole !== "ADMIN" && orgRole !== "DIRIGENTE" && orgRole !== "VICE_DIRIGENTE") {
+    } else if (!isManager) {
       return NextResponse.json(
         { error: "Acesso negado: Cargo sem permissão para criar lição" },
         { status: 403 }
@@ -264,7 +197,7 @@ export async function POST(req: NextRequest) {
         teacherName: teacherName || null,
         image: image || null,
         classId: classId || null,
-        organizationId: organizationId!,
+        organizationId: activeOrganizationId,
       },
     });
 

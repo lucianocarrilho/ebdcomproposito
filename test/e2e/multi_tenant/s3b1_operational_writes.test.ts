@@ -82,10 +82,48 @@ function registerAttendanceRecord(id: string) {
 }
 
 // Helpers de login e cookie session
+
+/**
+ * Combina um header Cookie existente com os cookies de um header Set-Cookie,
+ * devolvendo um header Cookie normalizado.
+ *
+ * - Extrai apenas pares nome=valor, descartando atributos (Path, HttpOnly,
+ *   SameSite, Expires, Max-Age, Domain, Secure).
+ * - A separação por vírgula ocorre somente quando a vírgula inicia um novo par,
+ *   preservando datas como "Expires=Thu, 01 Jan 1970 00:00:00 GMT".
+ * - Pares repetidos mantêm o último valor recebido, de modo que um
+ *   authjs.session-token atualizado substitui apenas o valor anterior do mesmo
+ *   cookie, preservando authjs.csrf-token e os demais pares.
+ */
+function mergeCookies(currentCookieHeader: string, setCookieHeader: string): string {
+  const jar = new Map<string, string>();
+
+  const addPair = (rawPair: string): void => {
+    const pair = rawPair.trim();
+    const separator = pair.indexOf("=");
+    if (separator <= 0) return;
+    jar.set(pair.slice(0, separator), pair.slice(separator + 1));
+  };
+
+  currentCookieHeader.split(";").forEach(addPair);
+
+  setCookieHeader
+    .split(/,(?=\s*[^;=,\s]+=)/)
+    .map((cookie) => cookie.split(";")[0])
+    .filter((pair) => /^\s*[^=\s]+=/.test(pair))
+    .forEach(addPair);
+
+  const normalized: string[] = [];
+  jar.forEach((value, name) => {
+    normalized.push(`${name}=${value}`);
+  });
+  return normalized.join("; ");
+}
+
 async function loginAndGetCookie(email: string, password = "password123"): Promise<string> {
   const csrfRes = await fetch(`${BASE_URL}/api/auth/csrf`);
   const { csrfToken } = await csrfRes.json();
-  const cookiesHeader = csrfRes.headers.get("set-cookie") || "";
+  const csrfCookie = mergeCookies("", csrfRes.headers.get("set-cookie") || "");
 
   const params = new URLSearchParams();
   params.append("csrfToken", csrfToken);
@@ -96,13 +134,13 @@ async function loginAndGetCookie(email: string, password = "password123"): Promi
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
-      Cookie: cookiesHeader,
+      Cookie: csrfCookie,
     },
     body: params.toString(),
     redirect: "manual",
   });
 
-  return loginRes.headers.get("set-cookie") || cookiesHeader;
+  return mergeCookies(csrfCookie, loginRes.headers.get("set-cookie") || "");
 }
 
 async function createUserAndLoginInOrg(
@@ -142,22 +180,21 @@ async function createUserAndLoginInOrg(
 async function switchOrgInSession(cookie: string, orgId: string): Promise<string> {
   const csrfRes = await fetch(`${BASE_URL}/api/auth/csrf`, { headers: { Cookie: cookie } });
   const { csrfToken } = await csrfRes.json();
-  const csrfCookies = csrfRes.headers.get("set-cookie") || cookie;
+  const cookieWithCsrf = mergeCookies(cookie, csrfRes.headers.get("set-cookie") || "");
 
   const sessionRes = await fetch(`${BASE_URL}/api/auth/session`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Cookie: csrfCookies,
+      Cookie: cookieWithCsrf,
     },
     body: JSON.stringify({
       csrfToken,
-      data: { activeOrgId: orgId },
+      data: { activeOrganizationId: orgId },
     }),
   });
 
-  const sessionCookies = sessionRes.headers.get("set-cookie");
-  return sessionCookies || csrfCookies;
+  return mergeCookies(cookieWithCsrf, sessionRes.headers.get("set-cookie") || "");
 }
 
 // Fixtures Base
@@ -293,7 +330,7 @@ describe("Fase S3B.1 — Operational Writes Isolation & Multi-Tenant Authorizati
     trackedLessonIds.clear();
     trackedNotificationIds.clear();
     trackedAttendanceRecordIds.clear();
-  });
+  }, 60_000);
 
   afterEach(async () => {
     const justList = Array.from(trackedJustificationIds);

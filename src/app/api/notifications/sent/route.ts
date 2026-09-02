@@ -1,119 +1,95 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/permissions';
-import { requireOrganization } from '@/lib/organization-guard';
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { requireOrganization } from "@/lib/permissions";
 
-export async function GET(req: NextRequest) {
+export const dynamic = "force-dynamic";
+
+export async function GET() {
   try {
-    const authResult = await requireAuth(req);
-    if (!authResult.authorized) {
-      return authResult.response;
-    }
-    const session = authResult.session;
-
-    // Lógica Multi-tenant isolada (S3A.2)
-    const orgResult = await requireOrganization(req, {
-      requireActiveOrg: false,
-      allowGlobalAdminFallback: false,
-    });
-
-    if (!orgResult.authorized) {
-      return orgResult.response;
+    const authResult = await requireOrganization(true);
+    if ("error" in authResult || !("activeOrganizationId" in authResult)) {
+      return NextResponse.json(
+        { error: "error" in authResult ? authResult.error : "Organização não selecionada" },
+        { status: "status" in authResult ? authResult.status : 403 }
+      );
     }
 
-    const { organizationId, isGlobalAdmin, activeOrgId } = orgResult;
+    const { activeOrganizationId, user } = authResult;
 
-    // Se o usuário tiver um activeOrganizationId ou organização resolvida via guard
-    if (organizationId || activeOrgId) {
-      const targetOrgId = organizationId || activeOrgId;
+    const userId = user.id;
 
-      // Buscar membership ativa do usuário para determinar seu pertencimento à organização
-      const membership = await prisma.organizationMembership.findFirst({
-        where: {
-          userId: session.user.id,
-          organizationId: targetOrgId,
-          status: "ACTIVE",
-        },
-      });
-
-      // Se não possui membership ativa e não é Global Admin, 403 Forbidden
-      if (!membership && !isGlobalAdmin) {
-        return NextResponse.json(
-          { error: "Acesso negado: Usuário não é membro ativo desta organização" },
-          { status: 403 }
-        );
-      }
-
-      // Buscar notificações enviadas pelo usuário nesta organização
-      const sentNotifications = await prisma.notification.findMany({
-        where: {
-          senderId: session.user.id,
-          organizationId: targetOrgId,
-        },
-        include: {
-          reads: true,
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-      });
-
-      return NextResponse.json(sentNotifications);
-    }
-
-    // Comportamento Legacy (Sem organização ativa e sem header x-organization-id)
-    const sentNotifications = await prisma.notification.findMany({
+    // 1. Fetch notifications
+    const notifications = await prisma.notification.findMany({
       where: {
-        senderId: session.user.id,
+        senderId: userId,
+        organizationId: activeOrganizationId,
       },
-      include: {
-        reads: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: { createdAt: "desc" },
+      take: 50
     });
 
-    return NextResponse.json(sentNotifications);
-  } catch (error) {
-    console.error('Erro ao buscar notificações enviadas:', error);
-    return NextResponse.json(
-      { error: 'Erro interno ao buscar avisos enviados' },
-      { status: 500 }
-    );
+    if (!notifications || notifications.length === 0) return NextResponse.json([]);
+
+    // 2. Fetch all reads for these notifications
+    const notificationIds = notifications.map(n => n.id);
+    const allReads = await prisma.notificationRead.findMany({
+      where: {
+        notificationId: { in: notificationIds }
+      }
+    });
+
+    // 3. Fetch users involved
+    const userIds = Array.from(new Set(allReads.map(r => r.userId)));
+    const allUsers = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, name: true }
+    });
+
+    // 4. Assemble the final data manual to avoid Prisma "Unknown field" errors on joins
+    const formatted = notifications.map(notif => {
+      const readsForNotif = allReads.filter(r => r.notificationId === notif.id);
+
+      return {
+        ...notif,
+        _count: {
+          reads: readsForNotif.length
+        },
+        reads: readsForNotif.map(r => {
+          const userObj = allUsers.find(u => u.id === r.userId);
+          return {
+            user: { name: userObj?.name || "Usuário" }
+          };
+        }).slice(0, 50)
+      };
+    });
+
+    return NextResponse.json(formatted);
+  } catch (error: any) {
+    console.error("Erro ao buscar avisos enviados:", error);
+    return NextResponse.json({
+      error: "Erro interno",
+      details: error.message || "Sem detalhes extras"
+    }, { status: 500 });
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
-    const authResult = await requireAuth(req);
-    if (!authResult.authorized) {
-      return authResult.response;
-    }
-    const session = authResult.session;
-
-    const orgResult = await requireOrganization(req, {
-      requireActiveOrg: true,
-      allowGlobalAdminFallback: false,
-    });
-
-    if (!orgResult.authorized) {
-      return orgResult.response;
-    }
-
-    const { organizationId, isGlobalAdmin } = orgResult;
-
-    const membership = await prisma.organizationMembership.findFirst({
-      where: {
-        userId: session.user.id,
-        organizationId: organizationId!,
-        status: "ACTIVE",
-      },
-    });
-
-    if (!membership && !isGlobalAdmin) {
+    const authResult = await requireOrganization(true);
+    if ("error" in authResult || !("activeOrganizationId" in authResult)) {
       return NextResponse.json(
-        { error: "Acesso negado: Membro inativo ou não pertencente a esta organização" },
+        { error: "error" in authResult ? authResult.error : "Organização não selecionada" },
+        { status: "status" in authResult ? authResult.status : 403 }
+      );
+    }
+
+    const { activeOrganizationId, orgRole, user, globalAdminMode } = authResult;
+
+    const isManager = globalAdminMode || (orgRole ? ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE"].includes(orgRole) : false);
+
+    if (!isManager) {
+      return NextResponse.json(
+        { error: "Acesso negado: Cargo sem permissão para excluir comunicado" },
         { status: 403 }
       );
     }
@@ -131,8 +107,8 @@ export async function DELETE(req: NextRequest) {
     const deleteResult = await prisma.notification.deleteMany({
       where: {
         id,
-        senderId: session.user.id,
-        organizationId: organizationId!,
+        senderId: user.id,
+        organizationId: activeOrganizationId,
       },
     });
 
