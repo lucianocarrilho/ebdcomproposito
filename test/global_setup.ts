@@ -30,12 +30,73 @@ export async function setup() {
   if (serverProc.stderr) serverProc.stderr.pipe(process.stderr);
 
   let ready = false;
-  for (let i = 0; i < 60; i++) {
+  const startTime = Date.now();
+  const totalTimeoutMs = 60000;
+  const deadline = startTime + totalTimeoutMs;
+
+  while (Date.now() < deadline) {
+    const remainingTime = deadline - Date.now();
+    if (remainingTime <= 0) break;
+
+    const probeTimeoutMs = Math.min(2000, remainingTime);
+
     const isReady = await new Promise<boolean>((resolve) => {
-      const req = http.get('http://localhost:3100', (res) => {
-        resolve(res.statusCode === 200 || res.statusCode === 404);
+      let settled = false;
+
+      const finish = (result: boolean) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        req.destroy();
+        resolve(result);
+      };
+
+      const timer = setTimeout(() => {
+        finish(false);
+      }, probeTimeoutMs);
+
+      const req = http.get('http://localhost:3100/api/auth/csrf', (res) => {
+        const { statusCode, headers } = res;
+        const contentType = headers['content-type'] || '';
+
+        let rawData = '';
+        res.setEncoding('utf8');
+
+        res.on('data', (chunk) => {
+          rawData += chunk;
+        });
+
+        res.on('end', () => {
+          if (statusCode !== 200 || !contentType.includes('application/json')) {
+            finish(false);
+            return;
+          }
+
+          try {
+            const parsed: unknown = JSON.parse(rawData);
+            if (
+              typeof parsed === 'object' &&
+              parsed !== null &&
+              'csrfToken' in parsed &&
+              typeof parsed.csrfToken === 'string' &&
+              parsed.csrfToken.trim().length > 0
+            ) {
+              finish(true);
+            } else {
+              finish(false);
+            }
+          } catch {
+            finish(false);
+          }
+        });
+
+        res.on('error', () => finish(false));
+        res.on('close', () => {
+          if (!settled) finish(false);
+        });
       });
-      req.on('error', () => resolve(false));
+
+      req.on('error', () => finish(false));
     });
 
     if (isReady) {
@@ -43,7 +104,10 @@ export async function setup() {
       ready = true;
       break;
     }
-    await new Promise((r) => setTimeout(r, 1000));
+
+    const currentRemaining = deadline - Date.now();
+    if (currentRemaining <= 0) break;
+    await new Promise((r) => setTimeout(r, Math.min(1000, currentRemaining)));
   }
 
   if (!ready) {
@@ -79,8 +143,13 @@ function isPidAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
-  } catch (e: any) {
-    return e.code === 'EPERM';
+  } catch (e: unknown) {
+    return (
+      typeof e === 'object' &&
+      e !== null &&
+      'code' in e &&
+      e.code === 'EPERM'
+    );
   }
 }
 
