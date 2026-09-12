@@ -8,7 +8,7 @@ let serverProc: ChildProcess | undefined;
 
 export async function setup() {
   console.log('[Global Setup] Validando ambiente de testes...');
-  validateTestEnv();
+  await validateTestEnv();
 
   console.log('[Global Setup] Booting Next.js test server diretamente...');
   

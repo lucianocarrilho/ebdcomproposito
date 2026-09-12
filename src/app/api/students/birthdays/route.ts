@@ -4,14 +4,31 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
   try {
-    const orgData = await requireOrganization(true);
-    if (!orgData || (orgData as any).error) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
+    const authResult = await requireOrganization(true);
+    if ("error" in authResult || !("activeOrganizationId" in authResult)) {
+      return NextResponse.json(
+        {
+          error:
+            "error" in authResult
+              ? authResult.error
+              : "Organização não selecionada",
+        },
+        {
+          status:
+            "status" in authResult
+              ? authResult.status
+              : 403,
+        }
+      );
     }
-    const { activeOrganizationId, orgRole } = orgData as any;
+    const { activeOrganizationId, orgRole, globalAdminMode } = authResult;
 
     const allowedRoles = ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"];
-    if (!allowedRoles.includes(orgRole)) {
+    const isAllowed =
+      globalAdminMode ||
+      (orgRole ? allowedRoles.includes(orgRole) : false);
+
+    if (!isAllowed) {
       return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
     }
 
@@ -23,6 +40,9 @@ export async function GET(request: NextRequest) {
     }
 
     const month = parseInt(monthStr);
+    if (isNaN(month) || month < 1 || month > 12) {
+      return NextResponse.json({ error: "Mês inválido" }, { status: 400 });
+    }
 
     // Fetch all active students in this organization
     const students = await prisma.student.findMany({
@@ -40,15 +60,13 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Filter by month in JS because Prisma doesn't support month() function out of the box for SQLite/MySQL easily
     const birthdays = students.filter(student => {
       if (!student.birthDate) return false;
-      return student.birthDate.getMonth() + 1 === month;
+      return student.birthDate.getUTCMonth() + 1 === month;
     });
 
-    // Sort by day
     birthdays.sort((a, b) => {
-      return (a.birthDate?.getDate() || 0) - (b.birthDate?.getDate() || 0);
+      return (a.birthDate?.getUTCDate() || 0) - (b.birthDate?.getUTCDate() || 0);
     });
 
     return NextResponse.json(birthdays);

@@ -2,9 +2,28 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireOrganization } from "@/lib/permissions";
 
-// GET - Buscar chamada por data e classe
+// GET - Buscar chamada por data e classe na organização ativa
 export async function GET(request: NextRequest) {
   try {
+    const authResult = await requireOrganization(true);
+    if ("error" in authResult || !("activeOrganizationId" in authResult)) {
+      return NextResponse.json(
+        {
+          error:
+            "error" in authResult
+              ? authResult.error
+              : "Organização não selecionada",
+        },
+        {
+          status:
+            "status" in authResult
+              ? authResult.status
+              : 403,
+        }
+      );
+    }
+    const { activeOrganizationId } = authResult;
+
     const { searchParams } = new URL(request.url);
     const classId = searchParams.get("classId");
     const date = searchParams.get("date");
@@ -17,11 +36,33 @@ export async function GET(request: NextRequest) {
     }
 
     const parsedDate = new Date(date + "T00:00:00.000Z");
+    if (isNaN(parsedDate.getTime())) {
+      return NextResponse.json(
+        { error: "Data inválida" },
+        { status: 400 }
+      );
+    }
 
-    // Get existing record
-    const record = await prisma.attendanceRecord.findUnique({
+    const targetClass = await prisma.class.findFirst({
       where: {
-        date_classId: { date: parsedDate, classId },
+        id: classId,
+        organizationId: activeOrganizationId,
+      },
+    });
+
+    if (!targetClass) {
+      return NextResponse.json(
+        { error: "Turma não encontrada nesta organização" },
+        { status: 404 }
+      );
+    }
+
+    // Get existing record for the active organization
+    const record = await prisma.attendanceRecord.findFirst({
+      where: {
+        date: parsedDate,
+        classId,
+        organizationId: activeOrganizationId,
       },
       include: {
         items: {
@@ -30,9 +71,9 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Get all students for the class
+    // Get all active students for the class in the active organization
     const students = await prisma.student.findMany({
-      where: { classId, active: true },
+      where: { classId, organizationId: activeOrganizationId, active: true },
       select: { id: true, name: true, photo: true },
       orderBy: { name: "asc" },
     });

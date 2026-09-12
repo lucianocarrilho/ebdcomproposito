@@ -3,17 +3,42 @@ import { requireOrganization } from "@/lib/permissions";
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
+
 // GET - Listar alunos
 export async function GET(request: NextRequest) {
   try {
-    const orgData = await requireOrganization(true);
-    if (!orgData || (orgData as any).error) {
-      return NextResponse.json({ error: "Não autorizado ou organização não selecionada" }, { status: 403 });
+    const authResult = await requireOrganization(true);
+    if ("error" in authResult || !("activeOrganizationId" in authResult)) {
+      return NextResponse.json(
+        {
+          error:
+            "error" in authResult
+              ? authResult.error
+              : "Organização não selecionada",
+        },
+        {
+          status:
+            "status" in authResult
+              ? authResult.status
+              : 403,
+        }
+      );
     }
-    const { activeOrganizationId, orgRole } = orgData as any;
+    const { activeOrganizationId, orgRole, globalAdminMode } = authResult;
 
     const allowedRoles = ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"];
-    if (!allowedRoles.includes(orgRole)) {
+    const isAllowed =
+      globalAdminMode ||
+      (orgRole ? allowedRoles.includes(orgRole) : false);
+
+    if (!isAllowed) {
       return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
     }
 
@@ -24,7 +49,7 @@ export async function GET(request: NextRequest) {
     const activeParam = searchParams.get("active");
 
     const where: Prisma.StudentWhereInput = {
-      organizationId: activeOrganizationId
+      organizationId: activeOrganizationId,
     };
 
     if (queryClassId) {
@@ -68,33 +93,62 @@ export async function GET(request: NextRequest) {
 // POST - Criar aluno
 export async function POST(request: NextRequest) {
   try {
-    const orgData = await requireOrganization(true);
-    if (!orgData || (orgData as any).error) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
+    const authResult = await requireOrganization(true);
+    if ("error" in authResult || !("activeOrganizationId" in authResult)) {
+      return NextResponse.json(
+        {
+          error:
+            "error" in authResult
+              ? authResult.error
+              : "Organização não selecionada",
+        },
+        {
+          status:
+            "status" in authResult
+              ? authResult.status
+              : 403,
+        }
+      );
     }
-    const { activeOrganizationId, orgRole } = orgData as any;
+    const { activeOrganizationId, orgRole, globalAdminMode } = authResult;
 
-    if (orgRole !== "ADMIN" && orgRole !== "DIRIGENTE") {
+    const isManager =
+      globalAdminMode ||
+      (orgRole
+        ? ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE"].includes(orgRole)
+        : false);
+
+    if (!isManager) {
       return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
     }
 
-    const body = await request.json();
+    const rawBody: unknown = await request.json();
 
-    if ("organizationId" in body) {
-      return NextResponse.json({ error: "O campo organizationId não deve ser enviado" }, { status: 400 });
+    if (!isRecord(rawBody) || "organizationId" in rawBody) {
+      return NextResponse.json(
+        { error: "Payload inválido ou campo organizationId proibido" },
+        { status: 400 }
+      );
     }
 
-    let {
+    const body = rawBody;
+
+    const {
       name, gender, birthDate, phone, address, guardian,
       classId, observations, baptized, member, newConvert, photo
     } = body;
 
-    if (!name || !classId) {
+    if (
+      typeof name !== "string" ||
+      name.trim().length === 0 ||
+      typeof classId !== "string" ||
+      classId.trim().length === 0
+    ) {
       return NextResponse.json({ error: "Nome e classe são obrigatórios" }, { status: 400 });
     }
 
     const classExists = await prisma.class.findFirst({
-      where: { id: classId, organizationId: activeOrganizationId }
+      where: { id: classId, organizationId: activeOrganizationId },
     });
 
     if (!classExists) {
@@ -103,18 +157,18 @@ export async function POST(request: NextRequest) {
 
     const student = await prisma.student.create({
       data: {
-        name,
-        gender,
-        birthDate: birthDate ? new Date(birthDate) : null,
-        phone,
-        address,
-        guardian,
+        name: name.trim(),
+        gender: typeof gender === "string" ? gender : null,
+        birthDate: typeof birthDate === "string" && birthDate.trim().length > 0 ? new Date(birthDate) : null,
+        phone: typeof phone === "string" ? phone : null,
+        address: typeof address === "string" ? address : null,
+        guardian: typeof guardian === "string" ? guardian : null,
         classId,
-        observations,
-        baptized: baptized || false,
-        member: member || false,
-        newConvert: newConvert || false,
-        photo,
+        observations: typeof observations === "string" ? observations : null,
+        baptized: typeof baptized === "boolean" ? baptized : false,
+        member: typeof member === "boolean" ? member : false,
+        newConvert: typeof newConvert === "boolean" ? newConvert : false,
+        photo: typeof photo === "string" ? photo : null,
         organizationId: activeOrganizationId,
       },
       include: { class: { select: { id: true, name: true } } },
