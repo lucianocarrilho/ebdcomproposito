@@ -8,29 +8,50 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const orgData = await requireOrganization(true);
-    if (!orgData || (orgData as any).error) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
+    const authResult = await requireOrganization(true);
+    if ("error" in authResult || !("activeOrganizationId" in authResult)) {
+      return NextResponse.json(
+        {
+          error:
+            "error" in authResult
+              ? authResult.error
+              : "Organização não selecionada",
+        },
+        {
+          status:
+            "status" in authResult
+              ? authResult.status
+              : 403,
+        }
+      );
     }
-    const { activeOrganizationId, orgRole } = orgData as any;
+    const { activeOrganizationId, orgRole, globalAdminMode } = authResult;
 
-    const allowedRoles = ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "APOIO"]; // Professor removido de history se desejar restrito, mas na matriz estava APOIO
-    if (!allowedRoles.includes(orgRole)) {
+    const allowedRoles = ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"];
+    const isAllowed =
+      globalAdminMode ||
+      (orgRole ? allowedRoles.includes(orgRole) : false);
+
+    if (!isAllowed) {
       return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
     }
 
-    const leader = await prisma.leader.findUnique({
-      where: { id: id }
+    const leader = await prisma.leader.findFirst({
+      where: { id: id, organizationId: activeOrganizationId },
+      select: { id: true },
     });
 
-    if (!leader || leader.organizationId !== activeOrganizationId) {
+    if (!leader) {
       return NextResponse.json({ error: "Líder não encontrado" }, { status: 404 });
     }
 
     const attendance = await prisma.leaderAttendance.findMany({
-      where: { leaderId: id },
+      where: {
+        leaderId: id,
+        leader: { organizationId: activeOrganizationId },
+      },
       orderBy: { date: "desc" },
-      take: 20
+      take: 20,
     });
 
     return NextResponse.json(attendance);

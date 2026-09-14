@@ -1,28 +1,81 @@
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireOrganization } from "@/lib/permissions";
 import { NextRequest, NextResponse } from "next/server";
+import { AttendanceStatus } from "@prisma/client";
 
-const ALLOWED_ROLES = ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"];
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
+
+class LeaderNotFoundError extends Error {
+  constructor() {
+    super("LEADER_NOT_FOUND");
+    this.name = "LeaderNotFoundError";
+  }
+}
+
+const VALID_STATUSES: readonly string[] = ["PRESENTE", "FALTA", "FALTA_JUSTIFICADA"];
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    const userRole = (session?.user as any)?.role;
-    if (!session || !ALLOWED_ROLES.includes(userRole)) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    const authResult = await requireOrganization(true);
+    if ("error" in authResult || !("activeOrganizationId" in authResult)) {
+      return NextResponse.json(
+        {
+          error:
+            "error" in authResult
+              ? authResult.error
+              : "Organização não selecionada",
+        },
+        {
+          status:
+            "status" in authResult
+              ? authResult.status
+              : 403,
+        }
+      );
+    }
+    const { activeOrganizationId, orgRole, globalAdminMode } = authResult;
+
+    const allowedRoles = ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"];
+    const isAllowed =
+      globalAdminMode ||
+      (orgRole ? allowedRoles.includes(orgRole) : false);
+
+    if (!isAllowed) {
+      return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
     const dateStr = searchParams.get("date");
-    
+
     if (!dateStr) {
       return NextResponse.json({ error: "Data não informada" }, { status: 400 });
     }
 
     const date = new Date(dateStr + "T00:00:00.000Z");
+    if (isNaN(date.getTime())) {
+      return NextResponse.json({ error: "Data inválida" }, { status: 400 });
+    }
 
     const attendance = await prisma.leaderAttendance.findMany({
-      where: { date }
+      where: {
+        date,
+        leader: {
+          organizationId: activeOrganizationId,
+        },
+      },
+      select: {
+        id: true,
+        leaderId: true,
+        date: true,
+        status: true,
+        justification: true,
+      },
     });
 
     return NextResponse.json(attendance);
@@ -32,87 +85,148 @@ export async function GET(request: NextRequest) {
   }
 }
 
+interface ParsedLeaderAttendanceItem {
+  leaderId: string;
+  status: AttendanceStatus;
+  justification: string | null;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    const userRole = (session?.user as any)?.role;
-    if (!session || !ALLOWED_ROLES.includes(userRole)) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    const authResult = await requireOrganization(true);
+    if ("error" in authResult || !("activeOrganizationId" in authResult)) {
+      return NextResponse.json(
+        {
+          error:
+            "error" in authResult
+              ? authResult.error
+              : "Organização não selecionada",
+        },
+        {
+          status:
+            "status" in authResult
+              ? authResult.status
+              : 403,
+        }
+      );
+    }
+    const { activeOrganizationId, orgRole, globalAdminMode } = authResult;
+
+    const isManager =
+      globalAdminMode ||
+      (orgRole
+        ? ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE"].includes(orgRole)
+        : false);
+
+    if (!isManager) {
+      return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
     }
 
-    const body = await request.json();
-    const { date: dateStr, items } = body;
+    const rawBody: unknown = await request.json();
+    if (!isRecord(rawBody) || "organizationId" in rawBody) {
+      return NextResponse.json(
+        { error: "Payload inválido ou campo organizationId proibido" },
+        { status: 400 }
+      );
+    }
 
-    console.log("[LeaderAttendance] Raw body:", JSON.stringify(body));
+    const { date: dateStr, items } = rawBody;
 
-    if (!dateStr) {
+    if (typeof dateStr !== "string" || dateStr.trim().length === 0) {
       return NextResponse.json({ error: "Data não informada" }, { status: 400 });
     }
-    
-    if (!items || !Array.isArray(items) || items.length === 0) {
+
+    const date = new Date(dateStr.trim() + "T00:00:00.000Z");
+    if (isNaN(date.getTime())) {
+      return NextResponse.json({ error: "Data inválida" }, { status: 400 });
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "Nenhum item de presença enviado" }, { status: 400 });
     }
 
-    // Validate date format
-    const date = new Date(dateStr + "T00:00:00.000Z");
-    if (isNaN(date.getTime())) {
-      return NextResponse.json({ error: `Data inválida: ${dateStr}` }, { status: 400 });
+    const parsedItems: ParsedLeaderAttendanceItem[] = [];
+    const leaderIdsList: string[] = [];
+
+    for (const item of items) {
+      if (!isRecord(item)) {
+        return NextResponse.json({ error: "Item de presença inválido" }, { status: 400 });
+      }
+
+      const { leaderId, status, justification } = item;
+
+      if (typeof leaderId !== "string" || leaderId.trim().length === 0) {
+        return NextResponse.json({ error: "leaderId é obrigatório em cada item" }, { status: 400 });
+      }
+
+      if (typeof status !== "string" || !VALID_STATUSES.includes(status)) {
+        return NextResponse.json({ error: "Status de presença inválido" }, { status: 400 });
+      }
+
+      const trimmedLeaderId = leaderId.trim();
+      leaderIdsList.push(trimmedLeaderId);
+
+      parsedItems.push({
+        leaderId: trimmedLeaderId,
+        status: status as AttendanceStatus,
+        justification: typeof justification === "string" ? justification.trim() : null,
+      });
     }
 
-    console.log("[LeaderAttendance] Saving attendance:", {
-      date: date.toISOString(),
-      itemCount: items.length,
-      userRole,
-      sampleItem: items[0],
-    });
-
-    // Validate all leaderIds exist
-    const leaderIds = items.map((item: any) => item.leaderId).filter(Boolean);
-    const existingLeaders = await prisma.leader.findMany({
-      where: { id: { in: leaderIds } },
-      select: { id: true }
-    });
-    const existingIds = new Set(existingLeaders.map(l => l.id));
-    const invalidIds = leaderIds.filter((id: string) => !existingIds.has(id));
-    
-    if (invalidIds.length > 0) {
-      console.log("[LeaderAttendance] Invalid leader IDs:", invalidIds);
+    const uniqueLeaderIds = new Set(leaderIdsList);
+    if (uniqueLeaderIds.size !== leaderIdsList.length) {
+      return NextResponse.json(
+        { error: "Lista de presença contém líderes duplicados" },
+        { status: 400 }
+      );
     }
 
-    // Filter to only valid items
-    const validItems = items.filter((item: any) => 
-      item.leaderId && existingIds.has(item.leaderId) && item.status
+    const savedCount = await prisma.$transaction(async (tx) => {
+      const existingLeaders = await tx.leader.findMany({
+        where: {
+          id: { in: Array.from(uniqueLeaderIds) },
+          organizationId: activeOrganizationId,
+        },
+        select: { id: true },
+      });
+
+      if (existingLeaders.length !== uniqueLeaderIds.size) {
+        throw new LeaderNotFoundError();
+      }
+
+      await tx.leaderAttendance.deleteMany({
+        where: {
+          date,
+          leader: {
+            organizationId: activeOrganizationId,
+          },
+        },
+      });
+
+      await tx.leaderAttendance.createMany({
+        data: parsedItems.map((item) => ({
+          leaderId: item.leaderId,
+          date,
+          status: item.status,
+          justification: item.justification,
+        })),
+      });
+
+      return parsedItems.length;
+    });
+
+    return NextResponse.json({ success: true, saved: savedCount });
+  } catch (error) {
+    if (error instanceof LeaderNotFoundError) {
+      return NextResponse.json(
+        { error: "Um ou mais líderes não foram encontrados nesta organização" },
+        { status: 404 }
+      );
+    }
+    console.error("Erro ao salvar presença da liderança:", error);
+    return NextResponse.json(
+      { error: "Erro interno ao salvar presença da liderança" },
+      { status: 500 }
     );
-
-    if (validItems.length === 0) {
-      return NextResponse.json({ error: "Nenhum líder válido encontrado" }, { status: 400 });
-    }
-
-    // Delete existing records for this date first, then create new ones
-    // This avoids upsert issues with MySQL datetime comparisons
-    await prisma.leaderAttendance.deleteMany({
-      where: { date }
-    });
-
-    // Create all attendance records
-    await prisma.leaderAttendance.createMany({
-      data: validItems.map((item: any) => ({
-        leaderId: item.leaderId,
-        date,
-        status: item.status,
-        justification: item.justification || null,
-      }))
-    });
-
-    console.log("[LeaderAttendance] Success! Saved", validItems.length, "records for", date.toISOString());
-
-    return NextResponse.json({ success: true, saved: validItems.length });
-  } catch (error: any) {
-    console.error("[LeaderAttendance] ERROR:", error?.message || error);
-    console.error("[LeaderAttendance] Stack:", error?.stack);
-    return NextResponse.json({ 
-      error: "Erro ao salvar chamada",
-      details: error?.message || "Erro desconhecido"
-    }, { status: 500 });
   }
 }

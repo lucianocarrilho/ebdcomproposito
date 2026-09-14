@@ -17,7 +17,8 @@ export default defineConfig({
       'test/e2e/multi_tenant/s3a2_legacy_reads.test.ts',
       'test/e2e/multi_tenant/s3b1_operational_writes.test.ts',
       'test/e2e/multi_tenant/s3b2a_visitors_isolation.test.ts',
-      'test/e2e/multi_tenant/s3b2b1_students_isolation.test.ts'
+      'test/e2e/multi_tenant/s3b2b1_students_isolation.test.ts',
+      'test/e2e/multi_tenant/s3b2b2_leaders_isolation.test.ts'
     ],
     exclude: ['test/e2e/multi_tenant/s2_backfill.test.ts'],
     globalSetup: ['./test/global_setup.ts'],
