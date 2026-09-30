@@ -1,52 +1,96 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireOrganization } from "@/lib/permissions";
 import { AttendanceStatus } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const dateStr = searchParams.get("date") || new Date().toISOString().split("T")[0];
-  
-  // Usar split e Date.UTC para evitar deslocamento de fuso horário
-  const [year, month, day] = dateStr.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-  const nextDay = new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0, 0));
-
   try {
-    // 1. Buscar todas as classes ativas (campo status no prisma)
+    const authResult = await requireOrganization(true);
+    if ("error" in authResult || !("activeOrganizationId" in authResult)) {
+      return NextResponse.json(
+        {
+          error:
+            "error" in authResult
+              ? authResult.error
+              : "Organização não selecionada",
+        },
+        {
+          status:
+            "status" in authResult
+              ? authResult.status
+              : 403,
+        }
+      );
+    }
+    const { activeOrganizationId, orgRole, globalAdminMode } = authResult;
+
+    const isManager =
+      globalAdminMode ||
+      (orgRole
+        ? ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE"].includes(orgRole)
+        : false);
+
+    if (!isManager) {
+      return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
+    }
+
+    const searchParams = request.nextUrl.searchParams;
+    const dateStr = searchParams.get("date") || new Date().toISOString().split("T")[0];
+
+    // Usar split e Date.UTC para evitar deslocamento de fuso horário
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    const nextDay = new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0, 0));
+
+    // 1. Buscar todas as classes ativas da organização ativa
     const classes = await prisma.class.findMany({
-      where: { status: true },
+      where: {
+        organizationId: activeOrganizationId,
+        status: true,
+      },
       include: {
         _count: {
-          select: { students: { where: { active: true } } }
+          select: {
+            students: {
+              where: {
+                organizationId: activeOrganizationId,
+                active: true,
+              },
+            },
+          },
         },
         attendanceRecords: {
-          where: { 
-            date: { 
-              gte: date, 
-              lt: nextDay 
-            } 
+          where: {
+            organizationId: activeOrganizationId,
+            date: {
+              gte: date,
+              lt: nextDay,
+            },
           },
           include: {
-            items: true
-          }
+            items: true,
+          },
         },
         visitors: {
-          where: { date: { gte: date, lt: nextDay } }
-        }
+          where: {
+            organizationId: activeOrganizationId,
+            date: { gte: date, lt: nextDay },
+          },
+        },
       },
-      orderBy: { name: "asc" }
+      orderBy: { name: "asc" },
     });
 
-    const reportData = classes.map(c => {
+    const reportData = classes.map((c) => {
       const enrolled = c._count.students;
-      const record = c.attendanceRecords[0]; 
-      
+      const record = c.attendanceRecords[0];
+
       let present = 0;
       let absent = 0;
       let justified = 0;
-      
+
       if (record) {
-        record.items.forEach((item: any) => {
+        record.items.forEach((item) => {
           if (item.status === AttendanceStatus.PRESENTE) present++;
           else if (item.status === AttendanceStatus.FALTA) absent++;
           else if (item.status === AttendanceStatus.FALTA_JUSTIFICADA) justified++;
@@ -67,7 +111,7 @@ export async function GET(request: NextRequest) {
         revistas: record?.revistas || 0,
         ofertas: record?.ofertas ? Number(record.ofertas) : 0,
         outros: record?.outros || 0,
-        freq: enrolled > 0 ? Math.round((present / enrolled) * 100) : 0
+        freq: enrolled > 0 ? Math.round((present / enrolled) * 100) : 0,
       };
     });
 
@@ -82,7 +126,7 @@ export async function GET(request: NextRequest) {
       totalRevistas: reportData.reduce((acc, curr) => acc + curr.revistas, 0),
       totalOfertas: reportData.reduce((acc, curr) => acc + curr.ofertas, 0),
       totalOutros: reportData.reduce((acc, curr) => acc + curr.outros, 0),
-      schoolFreq: 0
+      schoolFreq: 0,
     };
 
     if (summary.totalEnrolled > 0) {
@@ -90,16 +134,27 @@ export async function GET(request: NextRequest) {
     }
 
     // 3. Buscar Chamada da Liderança
-    const activeLeadersCount = await prisma.leader.count({ where: { active: true } });
+    const activeLeadersCount = await prisma.leader.count({
+      where: {
+        organizationId: activeOrganizationId,
+        active: true,
+      },
+    });
+
     const leaderRecords = await prisma.leaderAttendance.findMany({
-      where: { date: { gte: date, lt: nextDay } }
+      where: {
+        leader: {
+          organizationId: activeOrganizationId,
+        },
+        date: { gte: date, lt: nextDay },
+      },
     });
 
     let leaderPresent = 0;
     let leaderAbsent = 0;
     let leaderJustified = 0;
-    
-    leaderRecords.forEach(r => {
+
+    leaderRecords.forEach((r) => {
       if (r.status === AttendanceStatus.PRESENTE) leaderPresent++;
       else if (r.status === AttendanceStatus.FALTA) leaderAbsent++;
       else if (r.status === AttendanceStatus.FALTA_JUSTIFICADA) leaderJustified++;
@@ -110,14 +165,14 @@ export async function GET(request: NextRequest) {
       present: leaderPresent,
       absent: leaderAbsent,
       justified: leaderJustified,
-      freq: activeLeadersCount > 0 ? Math.round((leaderPresent / activeLeadersCount) * 100) : 0
+      freq: activeLeadersCount > 0 ? Math.round((leaderPresent / activeLeadersCount) * 100) : 0,
     };
 
     return NextResponse.json({
       date: dateStr,
       summary,
       classes: reportData,
-      leaders: leadersSummary
+      leaders: leadersSummary,
     });
   } catch (error) {
     console.error("Erro ao gerar mapa do dia:", error);

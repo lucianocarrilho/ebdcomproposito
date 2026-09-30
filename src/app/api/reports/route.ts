@@ -1,27 +1,71 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireOrganization } from "@/lib/permissions";
 import { AttendanceStatus } from "@prisma/client";
 
-export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const startDate = searchParams.get("startDate");
-  const endDate = searchParams.get("endDate");
-  const classId = searchParams.get("classId");
-  const type = searchParams.get("type") || "classe";
+interface BirthdayMember {
+  id: string;
+  name: string;
+  birthDate: Date | null;
+  photo: string | null;
+  class: { name: string };
+}
 
+export async function GET(request: NextRequest) {
   try {
+    const authResult = await requireOrganization(true);
+    if ("error" in authResult || !("activeOrganizationId" in authResult)) {
+      return NextResponse.json(
+        {
+          error:
+            "error" in authResult
+              ? authResult.error
+              : "Organização não selecionada",
+        },
+        {
+          status:
+            "status" in authResult
+              ? authResult.status
+              : 403,
+        }
+      );
+    }
+    const { activeOrganizationId, orgRole, globalAdminMode } = authResult;
+
+    const isManager =
+      globalAdminMode ||
+      (orgRole
+        ? ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE"].includes(orgRole)
+        : false);
+
+    if (!isManager) {
+      return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
+    }
+
+    const searchParams = request.nextUrl.searchParams;
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
+    const classId = searchParams.get("classId");
+    const type = searchParams.get("type") || "classe";
+
     const fromDate = startDate ? new Date(`${startDate}T00:00:00.000Z`) : new Date(new Date().getFullYear(), 0, 1);
     const toDate = endDate ? new Date(`${endDate}T23:59:59.999Z`) : new Date();
 
-    const classWhere: any = {};
     if (classId && classId !== "Todas") {
-      classWhere.id = classId;
+      const existingClass = await prisma.class.findFirst({
+        where: { id: classId, organizationId: activeOrganizationId },
+        select: { id: true },
+      });
+      if (!existingClass) {
+        return NextResponse.json({ error: "Classe não encontrada" }, { status: 404 });
+      }
     }
 
     // --- 1. HANDLE BIRTHDAYS (ANIVERSARIANTES) ---
     if (type === "aniversariantes") {
       const students = await prisma.student.findMany({
         where: {
+          organizationId: activeOrganizationId,
           active: true,
           ...(classId && classId !== "Todas" ? { classId } : {}),
         },
@@ -33,6 +77,12 @@ export async function GET(request: NextRequest) {
         where: {
           active: true,
           birthDate: { not: null },
+          memberships: {
+            some: {
+              organizationId: activeOrganizationId,
+              status: "ACTIVE",
+            },
+          },
           ...(classId && classId !== "Todas" ? { classId } : {}),
         },
         select: {
@@ -40,38 +90,46 @@ export async function GET(request: NextRequest) {
           name: true,
           birthDate: true,
           image: true,
-          role: true
-        }
+          role: true,
+        },
       });
 
-      const allMembers = [
-        ...students,
-        ...users.map(u => ({
+      const allMembers: BirthdayMember[] = [
+        ...students.map((s) => ({
+          id: s.id,
+          name: s.name,
+          birthDate: s.birthDate,
+          photo: s.photo,
+          class: { name: s.class.name },
+        })),
+        ...users.map((u) => ({
           id: u.id,
           name: u.name,
           birthDate: u.birthDate,
           photo: u.image,
-          class: { name: `Equipe (${u.role})` }
-        }))
+          class: { name: `Equipe (${u.role})` },
+        })),
       ];
 
       // Filter in-memory for precision with month/day across any year
-      const filteredAniversariantes = allMembers.filter(s => {
-        if (!s.birthDate) return false;
-        const bMonth = s.birthDate.getUTCMonth();
-        const bDay = s.birthDate.getUTCDate();
-        
-        const currentYear = new Date().getFullYear();
-        const bThisYear = new Date(currentYear, bMonth, bDay);
-        
-        return bThisYear >= fromDate && bThisYear <= toDate;
-      }).map(s => ({
-        id: s.id,
-        name: s.name,
-        date: s.birthDate,
-        classe: s.class.name,
-        photo: s.photo
-      }));
+      const filteredAniversariantes = allMembers
+        .filter((s) => {
+          if (!s.birthDate) return false;
+          const bMonth = s.birthDate.getUTCMonth();
+          const bDay = s.birthDate.getUTCDate();
+
+          const currentYear = new Date().getFullYear();
+          const bThisYear = new Date(Date.UTC(currentYear, bMonth, bDay));
+
+          return bThisYear >= fromDate && bThisYear <= toDate;
+        })
+        .map((s) => ({
+          id: s.id,
+          name: s.name,
+          date: s.birthDate,
+          classe: s.class.name,
+          photo: s.photo,
+        }));
 
       return NextResponse.json({ aniversariantes: filteredAniversariantes });
     }
@@ -80,6 +138,7 @@ export async function GET(request: NextRequest) {
     if (type === "aluno") {
       const students = await prisma.student.findMany({
         where: {
+          organizationId: activeOrganizationId,
           active: true,
           ...(classId && classId !== "Todas" ? { classId } : {}),
         },
@@ -88,31 +147,34 @@ export async function GET(request: NextRequest) {
           attendanceItems: {
             where: {
               record: {
+                organizationId: activeOrganizationId,
                 date: { gte: fromDate, lte: toDate },
               },
-            }
-          }
+            },
+          },
         },
       });
 
-      const studentData = students.map(s => {
-        const total = s.attendanceItems.length;
-        const presencas = s.attendanceItems.filter(i => i.status === AttendanceStatus.PRESENTE).length;
-        const faltas = s.attendanceItems.filter(i => i.status === AttendanceStatus.FALTA).length;
-        const justificadas = s.attendanceItems.filter(i => i.status === AttendanceStatus.FALTA_JUSTIFICADA).length;
-        const freq = total > 0 ? Math.round((presencas / total) * 100) : 0;
+      const studentData = students
+        .map((s) => {
+          const total = s.attendanceItems.length;
+          const presencas = s.attendanceItems.filter((i) => i.status === AttendanceStatus.PRESENTE).length;
+          const faltas = s.attendanceItems.filter((i) => i.status === AttendanceStatus.FALTA).length;
+          const justificadas = s.attendanceItems.filter((i) => i.status === AttendanceStatus.FALTA_JUSTIFICADA).length;
+          const freq = total > 0 ? Math.round((presencas / total) * 100) : 0;
 
-        return {
-          id: s.id,
-          name: s.name,
-          classe: s.class.name,
-          freq,
-          presencas,
-          faltas,
-          justificadas,
-          photo: s.photo
-        };
-      }).sort((a, b) => b.freq - a.freq);
+          return {
+            id: s.id,
+            name: s.name,
+            classe: s.class.name,
+            freq,
+            presencas,
+            faltas,
+            justificadas,
+            photo: s.photo,
+          };
+        })
+        .sort((a, b) => b.freq - a.freq);
 
       return NextResponse.json({ students: studentData });
     }
@@ -121,23 +183,24 @@ export async function GET(request: NextRequest) {
     if (type === "visitantes") {
       const visitors = await prisma.visitor.findMany({
         where: {
+          organizationId: activeOrganizationId,
           date: { gte: fromDate, lte: toDate },
           ...(classId && classId !== "Todas" ? { classId } : {}),
         },
         include: {
           class: true,
-          invitedBy: true
+          invitedBy: true,
         },
-        orderBy: { date: "desc" }
+        orderBy: { date: "desc" },
       });
 
-      const visitantes = visitors.map(v => ({
+      const visitantes = visitors.map((v) => ({
         id: v.id,
         name: v.name,
         date: v.date,
         classe: v.class.name,
         convidadoPor: v.invitedBy ? v.invitedBy.name : "-",
-        observations: v.observations
+        observations: v.observations,
       }));
 
       return NextResponse.json({ visitantes });
@@ -146,7 +209,11 @@ export async function GET(request: NextRequest) {
     // --- 4. HANDLE LEADERSHIP FREQUENCY (LIDERANÇA) ---
     if (type === "lideranca") {
       const leaders = await prisma.leader.findMany({
-        where: { active: true },
+        where: {
+          organizationId: activeOrganizationId,
+          active: true,
+          ...(classId && classId !== "Todas" ? { classId } : {}),
+        },
         include: {
           class: true,
           attendance: {
@@ -157,35 +224,36 @@ export async function GET(request: NextRequest) {
         },
       });
 
-      const leaderData = leaders.map(l => {
-        const total = l.attendance.length;
-        const presencas = l.attendance.filter(a => a.status === AttendanceStatus.PRESENTE).length;
-        const faltas = l.attendance.filter(a => a.status === AttendanceStatus.FALTA).length;
-        const justificadas = l.attendance.filter(a => a.status === AttendanceStatus.FALTA_JUSTIFICADA).length;
-        const freq = total > 0 ? Math.round((presencas / total) * 100) : 0;
+      const leaderData = leaders
+        .map((l) => {
+          const total = l.attendance.length;
+          const presencas = l.attendance.filter((a) => a.status === AttendanceStatus.PRESENTE).length;
+          const faltas = l.attendance.filter((a) => a.status === AttendanceStatus.FALTA).length;
+          const justificadas = l.attendance.filter((a) => a.status === AttendanceStatus.FALTA_JUSTIFICADA).length;
+          const freq = total > 0 ? Math.round((presencas / total) * 100) : 0;
 
-        return {
-          id: l.id,
-          name: l.name,
-          role: l.role,
-          classe: l.class?.name || "Geral",
-          freq,
-          presencas,
-          faltas,
-          justificadas,
-          total,
-          photo: l.photo,
-        };
-      }).sort((a, b) => b.freq - a.freq);
+          return {
+            id: l.id,
+            name: l.name,
+            role: l.role,
+            classe: l.class?.name || "Geral",
+            freq,
+            presencas,
+            faltas,
+            justificadas,
+            total,
+            photo: l.photo,
+          };
+        })
+        .sort((a, b) => b.freq - a.freq);
 
-      // Summary
       const totalLeaders = leaderData.length;
       let globalItems = 0;
       let globalPresencas = 0;
       let globalFaltas = 0;
       let globalJustificadas = 0;
-      leaders.forEach(l => {
-        l.attendance.forEach(a => {
+      leaders.forEach((l) => {
+        l.attendance.forEach((a) => {
           globalItems++;
           if (a.status === AttendanceStatus.PRESENTE) globalPresencas++;
           if (a.status === AttendanceStatus.FALTA) globalFaltas++;
@@ -205,17 +273,35 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // --- 5. HANDLE CLASS SUMMARY (DEFAULT) ---
+    // --- 5. HANDLE CLASS SUMMARY (DEFAULT, TRIMESTRE, PREMIADOS) ---
+    const classWhere: {
+      organizationId: string;
+      id?: string;
+    } = {
+      organizationId: activeOrganizationId,
+    };
+    if (classId && classId !== "Todas") {
+      classWhere.id = classId;
+    }
+
     const classes = await prisma.class.findMany({
       where: classWhere,
       include: {
         _count: {
           select: {
-            students: { where: { active: true } },
+            students: {
+              where: {
+                organizationId: activeOrganizationId,
+                active: true,
+              },
+            },
           },
         },
         attendanceRecords: {
-          where: { date: { gte: fromDate, lte: toDate } },
+          where: {
+            organizationId: activeOrganizationId,
+            date: { gte: fromDate, lte: toDate },
+          },
           include: {
             items: {
               select: { status: true },
@@ -257,7 +343,7 @@ export async function GET(request: NextRequest) {
         id: c.id,
         classe: c.name,
         matriculados,
-        ativos: matriculados, // Simplified for now
+        ativos: matriculados,
         mediaFreq,
         faltas,
         justificadas,
@@ -268,24 +354,15 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // 2. Calculate Global Summary
     const totalStudents = classData.reduce((acc, curr) => acc + curr.matriculados, 0);
     const totalFaltas = classData.reduce((acc, curr) => acc + curr.faltas, 0);
     const totalJustificadas = classData.reduce((acc, curr) => acc + curr.justificadas, 0);
-    
-    // Weighted Average Frequency
-    const totalPresencas = classData.reduce((acc, curr) => {
-      // Calculate back presences from mediaFreq for total items if we had total items here
-      // But let's just calculate from classes directly for accuracy
-      return acc;
-    }, 0);
 
-    // Re-calculating global for accuracy
     let globalTotalItems = 0;
     let globalPresencas = 0;
-    classes.forEach(c => {
-      c.attendanceRecords.forEach(r => {
-        r.items.forEach(i => {
+    classes.forEach((c) => {
+      c.attendanceRecords.forEach((r) => {
+        r.items.forEach((i) => {
           globalTotalItems++;
           if (i.status === AttendanceStatus.PRESENTE) globalPresencas++;
         });
