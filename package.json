@@ -11,7 +11,9 @@
     "test:s2": "cross-env NODE_ENV=test vitest run --config vitest.s2.config.ts",
     "test:app": "cross-env NODE_ENV=test vitest run --config vitest.app.config.ts",
     "test:watch": "cross-env NODE_ENV=test vitest",
-    "deploy": "echo \"DEPLOY: Apenas faça 'git push'. O projeto está hospedado na Vercel e o GitHub já realiza o deploy automaticamente. (O DB fica na Hostinger)\""
+    "deploy": "echo \"DEPLOY: Apenas faça 'git push'. O projeto está hospedado na Vercel e o GitHub já realiza o deploy automaticamente. (O DB fica na Hostinger)\"",
+    "test:security": "vitest run --config vitest.security.config.ts",
+    "typecheck:security": "tsc --noEmit -p tsconfig.security.json"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
