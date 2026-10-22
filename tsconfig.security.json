@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/lib/upload-security.ts",
+    "src/app/api/upload/route.ts",
+    "src/app/api/materials/upload/route.ts",
+    "src/app/api/materials/[id]/route.ts",
+    "test/security/**/*.test.ts",
+    "vitest.security.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next"
+  ]
+}

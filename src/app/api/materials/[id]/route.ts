@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { del } from "@vercel/blob";
+import { extractUserRole } from "@/lib/upload-security";
 
 // DELETE - Excluir material (Apenas ADMIN)
 export async function DELETE(
@@ -10,15 +11,26 @@ export async function DELETE(
 ) {
   try {
     const session = await auth();
-    if (!session || (session.user as any)?.role !== "ADMIN") {
-      return NextResponse.json({ error: "Apenas administradores podem excluir materiais" }, { status: 403 });
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: "Não autorizado" },
+        { status: 401 }
+      );
+    }
+
+    const userRole = extractUserRole(session);
+    if (userRole !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Apenas administradores podem excluir materiais" },
+        { status: 403 }
+      );
     }
 
     const { id } = await params;
 
     // Buscar o material para obter a URL do arquivo
     const material = await prisma.material.findUnique({
-      where: { id }
+      where: { id },
     });
 
     if (!material) {
@@ -27,24 +39,23 @@ export async function DELETE(
 
     // Excluir do Banco de Dados
     await prisma.material.delete({
-      where: { id }
+      where: { id },
     });
 
-    // Excluir do Vercel Blob se for uma URL remota
-    const blobToken = "vercel_blob_rw_12Z3rqWooPyc8G9Q_QvILDyvVrVA0gqpZJAmg0V6eR2qg8A";
+    // Excluir do Vercel Blob se for uma URL remota (sem token manual)
     if (material.fileUrl && material.fileUrl.includes("blob.vercel-storage.com")) {
       try {
-        console.log(`[API Materials Delete] Tentando excluir do Vercel Blob: ${material.fileUrl}`);
-        await del(material.fileUrl, { token: blobToken });
-        console.log(`[API Materials Delete] Sucesso ao excluir do Vercel Blob`);
-      } catch (blobError) {
-        console.error("[API Materials Delete] Erro ao excluir do Vercel Blob:", blobError);
+        await del(material.fileUrl);
+      } catch {
+        // Falha no blob não impede a remoção cadastral, mas é sanitizada para evitar vazamento
       }
     }
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error("Erro ao excluir material:", error);
-    return NextResponse.json({ error: error.message || "Erro ao excluir material" }, { status: 500 });
+  } catch {
+    return NextResponse.json(
+      { error: "Erro ao excluir material" },
+      { status: 500 }
+    );
   }
 }
