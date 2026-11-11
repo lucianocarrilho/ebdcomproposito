@@ -131,9 +131,25 @@ export async function requireGlobalAdmin(isApi = false) {
   if ('error' in authResult) return authResult;
 
   const { session, user } = authResult;
+  if (!user?.id) {
+    if (isApi) return { error: "Não autorizado", status: 401 };
+    redirect("/");
+  }
+
   if (!user.isGlobalAdmin) {
     if (isApi) return { error: "Permissão insuficiente", status: 403 };
     redirect("/select-organization");
   }
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { id: true, active: true, isGlobalAdmin: true },
+  });
+
+  if (!dbUser || !dbUser.active || !dbUser.isGlobalAdmin) {
+    if (isApi) return { error: "Permissão insuficiente", status: 403 };
+    redirect("/select-organization");
+  }
+
   return { session, user };
 }
