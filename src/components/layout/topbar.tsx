@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getGreeting } from "@/lib/utils";
 import { NotificationTray } from "./NotificationTray";
+import { resolveSessionActiveRole } from "@/lib/user-access-validation";
  
 const roleLabels: Record<string, string> = {
   ADMIN: "Administrador",
@@ -27,7 +28,7 @@ export function Topbar() {
   const memberships = user?.memberships || [];
   
   const currentMembership = memberships.find((m: any) => m.organizationId === activeOrgId);
-  const userRole = currentMembership?.role || user?.role || "APOIO";
+  const userRole = resolveSessionActiveRole(user);
   const orgName = user?.activeOrganizationName || currentMembership?.organizationName || (user?.isGlobalAdmin ? "Admin Global" : "Sem Congregação");
  
   // Buscar foto atualizada para contornar cache da sessão
@@ -35,9 +36,10 @@ export function Topbar() {
     async function syncUserPhoto() {
       if (user?.email) {
         try {
-          const res = await fetch("/api/users");
-          const users = await res.json();
-          const currentUser = users.find((u: any) => u.email === user.email);
+          const res = await fetch("/api/profile");
+          if (!res.ok) return;
+          const currentUser = await res.json();
+
           if (currentUser?.image) {
             setLiveImage(currentUser.image);
           }

@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 
 import { useSession, signOut } from "next-auth/react";
+import { resolveSessionActiveRole } from "@/lib/user-access-validation";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["ADMIN", "DIRIGENTE", "VICE_DIRIGENTE", "PROFESSOR", "APOIO"] },
@@ -65,7 +66,7 @@ export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const user = session?.user as any;
-  const userRole = user?.role || "APOIO";
+  const userRole = resolveSessionActiveRole(user);
   const activeOrgId = user?.activeOrganizationId;
   const isGlobalMode = !activeOrgId && user?.isGlobalAdmin;
 
