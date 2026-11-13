@@ -31,6 +31,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             }
           });
 
+          console.info("[auth-diagnostic] user-query", {
+            found: Boolean(user),
+            active: user?.active ?? null,
+            membershipCount: user?.memberships?.length ?? 0
+          });
+
           if (!user) {
             return null;
           }
@@ -42,6 +48,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             credentials.password as string,
             user.password
           );
+
+          console.info("[auth-diagnostic] password-check", {
+            matched: isPasswordValid
+          });
 
           if (!isPasswordValid) {
             return null;
@@ -65,7 +75,31 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             isGlobalAdmin: user.isGlobalAdmin,
             validMemberships
           };
-        } catch {
+        } catch (error) {
+          const diagnostic = error as {
+            name?: string;
+            code?: string;
+            message?: string;
+          };
+
+          let safeMessage = diagnostic.message ?? "NO_MESSAGE";
+          const databaseUrl = process.env.DATABASE_URL;
+
+          if (databaseUrl) {
+            safeMessage = safeMessage.replaceAll(databaseUrl, "[DATABASE_URL]");
+          }
+
+          safeMessage = safeMessage.replace(
+            /mysql:\/\/[^@\s]+@/gi,
+            "mysql://[REDACTED]@"
+          );
+
+          console.error("[auth-diagnostic] authorize-error", {
+            name: diagnostic.name ?? "Unknown",
+            code: diagnostic.code ?? "NO_CODE",
+            message: safeMessage
+          });
+
           return null;
         }
       },
