@@ -537,6 +537,118 @@ describe("S3B.2b1 — Multi-Tenant Students Isolation", () => {
     expect(dataA.some((s: { id: string }) => s.id === studentB1Id)).toBe(false);
   });
 
+  // TESTE 8b: GET /api/students/birthdays regressão de anos anteriores, mês padrão e dados formatados
+  it("8b. GET /api/students/birthdays exibe aniversariantes de anos anteriores pelo dia e mês, suporta mês padrão, mantém isolamento bilateral e exclui equipe", async () => {
+    const novStudentA = await prisma.student.create({
+      data: {
+        name: `${TEST_PREFIX}Nov_Student_OrgA`,
+        classId: classAId,
+        organizationId: orgAId,
+        birthDate: new Date("2012-11-08T00:00:00.000Z"),
+        active: true,
+      }
+    });
+
+    const mayStudentA = await prisma.student.create({
+      data: {
+        name: `${TEST_PREFIX}May_Student_OrgA`,
+        classId: classAId,
+        organizationId: orgAId,
+        birthDate: new Date("2015-05-20T00:00:00.000Z"),
+        active: true,
+      }
+    });
+
+    const novStudentB = await prisma.student.create({
+      data: {
+        name: `${TEST_PREFIX}Nov_Student_OrgB`,
+        classId: classBId,
+        organizationId: orgBId,
+        birthDate: new Date("1998-11-12T00:00:00.000Z"),
+        active: true,
+      }
+    });
+
+    const userEquipeA = await prisma.user.create({
+      data: {
+        name: `${TEST_PREFIX}User_Equipe_A`,
+        email: `${TEST_PREFIX}equipe_a_${Date.now()}@test.com`,
+        password: "hashed_dummy_password",
+        active: true,
+        birthDate: new Date("1985-11-20T00:00:00.000Z"),
+        memberships: {
+          create: { organizationId: orgAId, role: "ADMIN", status: "ACTIVE" }
+        }
+      }
+    });
+
+    try {
+      const resNovA = await fetch(`${BASE_URL}/api/students/birthdays?month=11&year=2026`, {
+        headers: { "Cookie": adminAWithOrgCookie }
+      });
+      expect(resNovA.status).toBe(200);
+      const dataNovA = (await resNovA.json()) as Array<{
+        id: string;
+        nome: string;
+        dia: number;
+        nascimento: string;
+        classe: string;
+        idade: number;
+        organizationId: string;
+      }>;
+
+      const foundA = dataNovA.find(s => s.id === novStudentA.id);
+      expect(foundA).toBeDefined();
+      expect(foundA?.dia).toBe(8);
+      expect(foundA?.nascimento).toBe("08/11");
+      expect(foundA?.nome).toBe(`${TEST_PREFIX}Nov_Student_OrgA`);
+      expect(foundA?.classe).toBeDefined();
+      expect(foundA?.idade).toBeGreaterThanOrEqual(13);
+      expect(foundA?.organizationId).toBe(orgAId);
+
+      // Usuário da equipe NÃO deve ser incluído na rota de aniversariantes de alunos
+      expect(dataNovA.some(s => s.id === userEquipeA.id)).toBe(false);
+      expect(dataNovA.some(s => s.nome.includes("Equipe"))).toBe(false);
+
+      expect(dataNovA.some(s => s.id === mayStudentA.id)).toBe(false);
+      expect(dataNovA.some(s => s.id === novStudentB.id)).toBe(false);
+
+      const resNovB = await fetch(`${BASE_URL}/api/students/birthdays?month=11&year=2026`, {
+        headers: { "Cookie": adminBWithOrgCookie }
+      });
+      expect(resNovB.status).toBe(200);
+      const dataNovB = (await resNovB.json()) as Array<{
+        id: string;
+        dia: number;
+        nascimento: string;
+        organizationId: string;
+      }>;
+      const foundB = dataNovB.find(s => s.id === novStudentB.id);
+      expect(foundB).toBeDefined();
+      expect(foundB?.dia).toBe(12);
+      expect(foundB?.nascimento).toBe("12/11");
+      expect(foundB?.organizationId).toBe(orgBId);
+      expect(dataNovB.some(s => s.id === novStudentA.id)).toBe(false);
+
+      const resDefault = await fetch(`${BASE_URL}/api/students/birthdays`, {
+        headers: { "Cookie": adminAWithOrgCookie }
+      });
+      expect(resDefault.status).toBe(200);
+      const dataDefault = await resDefault.json();
+      expect(Array.isArray(dataDefault)).toBe(true);
+    } finally {
+      await prisma.organizationMembership.deleteMany({
+        where: { userId: userEquipeA.id }
+      });
+      await prisma.user.deleteMany({
+        where: { id: userEquipeA.id }
+      });
+      await prisma.student.deleteMany({
+        where: { id: { in: [novStudentA.id, mayStudentA.id, novStudentB.id] } }
+      });
+    }
+  });
+
   // TESTE 9: GET /api/attendance retorna apenas alunos da org ativa
   it("9. GET /api/attendance retorna apenas alunos e chamada da organização ativa", async () => {
     const resA = await fetch(`${BASE_URL}/api/attendance?classId=${classAId}&date=2026-03-15`, {

@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { requireOrganization } from "@/lib/permissions";
 import { NextRequest, NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   try {
     const authResult = await requireOrganization(true);
@@ -34,40 +36,75 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const monthStr = searchParams.get("month");
+    const yearStr = searchParams.get("year");
 
-    if (!monthStr) {
-      return NextResponse.json({ error: "Mês não fornecido" }, { status: 400 });
-    }
+    const today = new Date();
+    const month = monthStr ? parseInt(monthStr, 10) : today.getMonth() + 1;
 
-    const month = parseInt(monthStr);
     if (isNaN(month) || month < 1 || month > 12) {
       return NextResponse.json({ error: "Mês inválido" }, { status: 400 });
     }
 
-    // Fetch all active students in this organization
+    const year = yearStr && !isNaN(parseInt(yearStr, 10)) ? parseInt(yearStr, 10) : today.getFullYear();
+
+    // Fetch all active students in this organization with birthDate
     const students = await prisma.student.findMany({
       where: {
         organizationId: activeOrganizationId,
         active: true,
-        birthDate: { not: null }
+        birthDate: { not: null },
       },
       select: {
         id: true,
         name: true,
         birthDate: true,
         class: { select: { id: true, name: true } },
-        photo: true
-      }
+        photo: true,
+        organizationId: true,
+      },
     });
 
-    const birthdays = students.filter(student => {
-      if (!student.birthDate) return false;
-      return student.birthDate.getUTCMonth() + 1 === month;
-    });
+    // Filter by birth month in JS across any year
+    const birthdays = students
+      .filter((student) => {
+        if (!student.birthDate) return false;
+        const b = new Date(student.birthDate);
+        return b.getUTCMonth() + 1 === month;
+      })
+      .map((student) => {
+        const birth = new Date(student.birthDate!);
+        const birthYear = birth.getUTCFullYear();
+        const birthMonth = birth.getUTCMonth() + 1;
+        const birthDay = birth.getUTCDate();
 
-    birthdays.sort((a, b) => {
-      return (a.birthDate?.getUTCDate() || 0) - (b.birthDate?.getUTCDate() || 0);
-    });
+        let age = year - birthYear;
+        const currentYear = today.getFullYear();
+        if (year === currentYear) {
+          const currentMonthActual = today.getMonth() + 1;
+          const currentDayActual = today.getDate();
+          if (
+            currentMonthActual < birthMonth ||
+            (currentMonthActual === birthMonth && currentDayActual < birthDay)
+          ) {
+            age--;
+          }
+        }
+
+        return {
+          id: student.id,
+          name: student.name,
+          nome: student.name,
+          birthDate: student.birthDate,
+          nascimento: `${String(birthDay).padStart(2, "0")}/${String(birthMonth).padStart(2, "0")}`,
+          class: student.class,
+          classe: student.class?.name || "Sem Turma",
+          idade: age >= 0 ? age : 0,
+          photo: student.photo || undefined,
+          dia: birthDay,
+          organizationId: student.organizationId,
+        };
+      })
+      .sort((a, b) => a.dia - b.dia);
 
     return NextResponse.json(birthdays);
   } catch (error) {

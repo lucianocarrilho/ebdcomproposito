@@ -30,7 +30,10 @@ export default function AniversariantesPage() {
   const fetchBirthdays = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/students/birthdays", { cache: "no-store" });
+      const today = new Date();
+      const currentMonth = today.getMonth() + 1;
+      const currentYear = today.getFullYear();
+      const res = await fetch(`/api/students/birthdays?month=${currentMonth}&year=${currentYear}`, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setBirthdays(data);
