@@ -47,11 +47,8 @@ export async function GET(request: NextRequest) {
 
     const where: Prisma.LeaderWhereInput = {
       organizationId: activeOrganizationId,
+      active: activeParam !== null ? activeParam === "true" : true,
     };
-
-    if (activeParam !== null) {
-      where.active = activeParam === "true";
-    }
 
     if (search && search.trim().length > 0) {
       where.name = { contains: search.trim() };
@@ -60,10 +57,25 @@ export async function GET(request: NextRequest) {
     const leaders = await prisma.leader.findMany({
       where,
       include: { class: { select: { id: true, name: true } } },
-      orderBy: { name: "asc" },
+      orderBy: [
+        { classId: "desc" },
+        { updatedAt: "desc" },
+      ],
     });
 
-    return NextResponse.json(leaders);
+    const uniqueMap = new Map<string, (typeof leaders)[0]>();
+    for (const leader of leaders) {
+      const key = leader.name.trim().toLowerCase();
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, leader);
+      }
+    }
+
+    const deduplicated = Array.from(uniqueMap.values()).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
+
+    return NextResponse.json(deduplicated);
   } catch (error) {
     console.error("Erro ao buscar líderes:", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });

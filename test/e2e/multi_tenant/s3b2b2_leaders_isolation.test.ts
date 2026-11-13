@@ -547,6 +547,81 @@ describe("S3B.2b2 — Multi-Tenant Leaders, History, and Leader Attendance Isola
     expect(dataB.some(l => l.id === leaderA1Id)).toBe(false);
   });
 
+  // TESTE 6b: GET /api/leaders regras de negócio (ativos por padrão, deduplicação defensiva, idempotência sem escrita, IDs válidos)
+  it("6b. GET /api/leaders filtra ativos por padrão, deduplica por nome, preserva IDs válidos e não cria registros", async () => {
+    const duplicateName = `${TEST_PREFIX}Duplicate_Leader`;
+    const leaderInactive = await prisma.leader.create({
+      data: {
+        name: `${TEST_PREFIX}Inactive_Leader`,
+        role: "Professor",
+        organizationId: orgAId,
+        active: false,
+      }
+    });
+
+    const leaderDup1 = await prisma.leader.create({
+      data: {
+        name: duplicateName,
+        role: "Professor",
+        organizationId: orgAId,
+        active: true,
+      }
+    });
+
+    const leaderDup2 = await prisma.leader.create({
+      data: {
+        name: `  ${duplicateName.toLowerCase()}  `,
+        role: "Professor",
+        organizationId: orgAId,
+        classId: classAId,
+        active: true,
+      }
+    });
+
+    try {
+      const countBefore = await prisma.leader.count({ where: { organizationId: orgAId } });
+
+      const res = await fetch(`${BASE_URL}/api/leaders`, {
+        headers: { "Cookie": adminAWithOrgCookie }
+      });
+      expect(res.status).toBe(200);
+      const data = (await res.json()) as Array<{ id: string; name: string; classId?: string | null }>;
+
+      const countAfter = await prisma.leader.count({ where: { organizationId: orgAId } });
+      expect(countAfter).toBe(countBefore);
+
+      expect(data.some(l => l.id === leaderInactive.id)).toBe(false);
+
+      const dupMatches = data.filter(l => l.name.trim().toLowerCase() === duplicateName.toLowerCase());
+      expect(dupMatches.length).toBe(1);
+
+      const matchedLeader = dupMatches[0];
+      expect([leaderDup1.id, leaderDup2.id]).toContain(matchedLeader.id);
+      const inDb = await prisma.leader.findUnique({ where: { id: matchedLeader.id } });
+      expect(inDb).not.toBeNull();
+      expect(inDb?.organizationId).toBe(orgAId);
+
+      const resInactive = await fetch(`${BASE_URL}/api/leaders?active=false`, {
+        headers: { "Cookie": adminAWithOrgCookie }
+      });
+      expect(resInactive.status).toBe(200);
+      const dataInactive = (await resInactive.json()) as Array<{ id: string }>;
+      expect(dataInactive.some(l => l.id === leaderInactive.id)).toBe(true);
+
+      const resOrgB = await fetch(`${BASE_URL}/api/leaders`, {
+        headers: { "Cookie": adminBWithOrgCookie }
+      });
+      expect(resOrgB.status).toBe(200);
+      const dataOrgB = (await resOrgB.json()) as Array<{ id: string }>;
+      expect(dataOrgB.some(l => l.id === matchedLeader.id)).toBe(false);
+      expect(dataOrgB.some(l => l.id === leaderInactive.id)).toBe(false);
+    } finally {
+      await prisma.leader.deleteMany({
+        where: { id: { in: [leaderInactive.id, leaderDup1.id, leaderDup2.id] } }
+      });
+    }
+  });
+
   // TESTE 7: GET /api/leaders/[id] próprio (200) e cross-tenant (404)
   it("7. GET /api/leaders/[id] retorna 200 para líder da própria org e 404 para líder de outra org", async () => {
     const resOwn = await fetch(`${BASE_URL}/api/leaders/${leaderA1Id}`, {
